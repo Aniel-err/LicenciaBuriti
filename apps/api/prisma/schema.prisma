@@ -1,0 +1,292 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EMPREENDEDOR
+  ANALISTA
+  FISCAL
+  ADMIN
+}
+
+enum PersonType {
+  PF
+  PJ
+}
+
+enum ProcessStatus {
+  RECEBIDO
+  EM_ANALISE
+  AGUARDANDO_DOCUMENTOS
+  DEFERIDO
+  INDEFERIDO
+  ARQUIVADO
+}
+
+enum LicenseType {
+  LP
+  LI
+  LO
+  LAU
+  REGULARIZACAO
+  RENOVACAO
+  DISPENSA
+  AUTORIZACAO
+}
+
+enum DocumentStatus {
+  PENDENTE
+  ENVIADO
+  VALIDADO
+  RECUSADO
+}
+
+enum InspectionType {
+  VISTORIA
+  AUTO_INFRACAO
+  EMBARGO
+  NOTIFICACAO
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         UserRole
+  phone        String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  entrepreneur Entrepreneur?
+  assigned     Process[]    @relation("AnalystProcesses")
+  auditLogs    AuditLog[]
+}
+
+model Entrepreneur {
+  id                  String        @id @default(cuid())
+  userId              String?       @unique
+  personType          PersonType
+  name                String
+  cpf                 String?
+  rg                  String?
+  companyName         String?
+  tradeName           String?
+  cnpj                String?
+  stateRegistration   String?
+  legalRepresentative String?
+  address             String
+  phone               String
+  email               String
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  user                User?         @relation(fields: [userId], references: [id])
+  technicalManagers   TechnicalManager[]
+  enterprises         Enterprise[]
+  processes           Process[]
+}
+
+model TechnicalManager {
+  id             String       @id @default(cuid())
+  entrepreneurId String
+  name           String
+  cpf            String
+  professionalId String
+  artDocument    String?
+  phone          String
+  email          String
+  entrepreneur   Entrepreneur @relation(fields: [entrepreneurId], references: [id])
+}
+
+model Enterprise {
+  id             String       @id @default(cuid())
+  entrepreneurId String
+  name           String
+  address        String
+  municipality   String       @default("Buriti - MA")
+  latitude       Decimal?
+  longitude      Decimal?
+  activityId     String
+  areaHectares   Decimal?
+  fiscalModules  Decimal?
+  size           String
+  pollutionLevel String
+  propertyClass  String
+  entrepreneur   Entrepreneur @relation(fields: [entrepreneurId], references: [id])
+  activity       Activity     @relation(fields: [activityId], references: [id])
+  processes      Process[]
+}
+
+model Activity {
+  id                String       @id @default(cuid())
+  code              String       @unique
+  description       String
+  size              String
+  pollutionLevel    String
+  requiredLicenses  LicenseType[]
+  requiredDocuments String[]
+  createdAt         DateTime     @default(now())
+  enterprises       Enterprise[]
+  fees              Fee[]
+}
+
+model Process {
+  id             String         @id @default(cuid())
+  number         String         @unique
+  protocol       String         @unique
+  entrepreneurId String
+  enterpriseId   String
+  analystId      String?
+  licenseType    LicenseType
+  status         ProcessStatus  @default(RECEBIDO)
+  openedAt       DateTime       @default(now())
+  dueDate        DateTime
+  decidedAt      DateTime?
+  publicSummary  String?
+  entrepreneur   Entrepreneur  @relation(fields: [entrepreneurId], references: [id])
+  enterprise     Enterprise    @relation(fields: [enterpriseId], references: [id])
+  analyst        User?          @relation("AnalystProcesses", fields: [analystId], references: [id])
+  documents      Document[]
+  issuedDocs     IssuedDocument[]
+  opinions       Opinion[]
+  conditions     Condition[]
+  inspections    Inspection[]
+  messages       Message[]
+  history        ProcessHistory[]
+}
+
+model Document {
+  id          String         @id @default(cuid())
+  processId   String
+  name        String
+  fileName    String?
+  filePath    String?
+  mimeType    String?
+  status      DocumentStatus @default(PENDENTE)
+  notes       String?
+  uploadedAt  DateTime?
+  process     Process        @relation(fields: [processId], references: [id])
+}
+
+model IssuedDocument {
+  id          String      @id @default(cuid())
+  processId   String
+  type        String
+  number      String      @unique
+  filePath    String?
+  signedBy    String?
+  issuedAt    DateTime    @default(now())
+  validUntil  DateTime?
+  process     Process     @relation(fields: [processId], references: [id])
+}
+
+model Opinion {
+  id          String   @id @default(cuid())
+  processId   String
+  authorId    String
+  conclusion  String
+  content     String
+  createdAt   DateTime @default(now())
+  process     Process  @relation(fields: [processId], references: [id])
+}
+
+model Condition {
+  id          String   @id @default(cuid())
+  processId   String
+  description String
+  dueDate     DateTime
+  status      String   @default("PENDENTE")
+  completedAt DateTime?
+  process     Process  @relation(fields: [processId], references: [id])
+}
+
+model Inspection {
+  id          String         @id @default(cuid())
+  processId   String
+  fiscalId    String
+  type        InspectionType
+  scheduledAt DateTime?
+  latitude    Decimal?
+  longitude   Decimal?
+  report      String
+  photos      String[]
+  status      String         @default("AGENDADA")
+  validatedAt DateTime?
+  validatedBy String?
+  validationNotes String?
+  createdAt   DateTime       @default(now())
+  process     Process        @relation(fields: [processId], references: [id])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  processId   String
+  senderName  String
+  content     String
+  createdAt   DateTime @default(now())
+  process     Process  @relation(fields: [processId], references: [id])
+}
+
+model ProcessHistory {
+  id          String        @id @default(cuid())
+  processId   String
+  status      ProcessStatus
+  description String
+  actorName   String
+  createdAt   DateTime      @default(now())
+  process     Process       @relation(fields: [processId], references: [id])
+}
+
+model Fee {
+  id           String      @id @default(cuid())
+  activityId   String
+  licenseType  LicenseType
+  size         String
+  amountCents  Int
+  activity     Activity    @relation(fields: [activityId], references: [id])
+}
+
+model News {
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  publishedAt DateTime @default(now())
+  isPublished Boolean  @default(true)
+}
+
+model DocumentTemplate {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  type      String
+  content   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SystemConfig {
+  id                    String   @id @default("default")
+  agency                String
+  municipality          String
+  analysisDeadlineDays  Int      @default(30)
+  expirationAlertDays   Int      @default(45)
+  maxUploadMb           Int      @default(10)
+  publicSearchEnabled   Boolean  @default(true)
+  updatedAt             DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entity      String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id])
+}

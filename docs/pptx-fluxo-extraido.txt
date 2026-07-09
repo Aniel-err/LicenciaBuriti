@@ -1,0 +1,172 @@
+PPTX: Relatorio_Proposta_Linguagens_Fluxo_Licenciamento_Buriti.pptx
+SLIDES: 9
+
+--- SLIDE 1 ---
+RELATÓRIO TÉCNICO DA PROPOSTA
+Sistema de Licenciamento e
+Gestão Ambiental Municipal
+Buriti — Maranhão
+Versão ajustada para desenvolvimento com JavaScript moderno, validação forte e TypeScript progressivo em módulos críticos.
+Linguagens
+Arquitetura
+Fluxos
+Segurança
+RELATÓRIO
+JS
+API
+DB
+Linguagens • Fluxos • Segurança • Entrega
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+01
+
+--- SLIDE 2 ---
+DIRETRIZ TÉCNICA
+Por que ajustar a linguagem da proposta?
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+02
+Objetivo do ajuste
+A proposta precisa vender uma solução profissional sem prender o desenvolvimento a uma tecnologia que possa atrasar a entrega.
+Antes
+Promessa fixa: front-end e back-end totalmente em TypeScript.
+Depois
+Stack em JavaScript moderno, validação rigorosa, arquitetura modular e adoção progressiva de TypeScript nos módulos críticos.
+Resultado esperado
+Menos risco de atraso, mais afinidade para desenvolver e manutenção técnica preservada por padrões, validações e testes.
+Mensagem central para a Secretaria
+A solução continua moderna, segura e escalável.
+JavaScript reduz barreira técnica e acelera a execução.
+TypeScript pode entrar depois nos pontos mais sensíveis.
+
+--- SLIDE 3 ---
+LINGUAGENS E FERRAMENTAS
+Stack proposta para a primeira entrega
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+03
+Front-end
+React + JavaScript + Tailwind CSS
+Telas responsivas, formulários, consulta pública e painel da Secretaria.
+Back-end
+Node.js + JavaScript
+API REST, autenticação, regras de licenciamento e geração de documentos.
+Banco
+PostgreSQL + Prisma ORM
+Dados relacionais, histórico, processos, perfis, taxas e auditoria.
+Validação
+Zod + regras no servidor
+Evita dados inválidos, protege formulários e padroniza entradas.
+Infraestrutura
+VPS + EasyPanel + SSL
+Publicação, HTTPS, backups e atualização controlada.
+Observação técnica
+TypeScript fica como evolução planejada para tipos de licença, permissões, documentos emitidos e regras de cálculo mais críticas.
+
+--- SLIDE 4 ---
+ARQUITETURA
+Modelo cliente-servidor com dados centralizados
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+04
+→
+→
+↗
+↘
+Usuário
+Navegador
+Front-end
+React
+API
+Node.js
+PostgreSQL
+Processos e logs
+Arquivos
+PDFs e fotos
+Separação clara entre interface, regras de negócio e persistência. A API concentra validações, permissões e auditoria.
+HTTPS em todas as chamadas • backups periódicos • logs de ações administrativas
+
+--- SLIDE 5 ---
+FLUXO OPERACIONAL
+Jornada do empreendedor
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+05
+Cadastro
+Empreendimento
+Solicitação
+Documentos
+Protocolo
+Acompanhar
+Entrada de dados
+Pessoa física ou jurídica, responsável técnico, empreendimento, coordenadas e atividade.
+Licenças e atos
+LUA, LUAR, ReLUA, LP, LI, LO, LOC, autorizações, certidões, DLA e ILA conforme regra cadastrada.
+Acompanhamento
+Pendências, mensagens, pareceres, documentos emitidos e histórico do processo.
+A lista de documentos deve ser dinâmica: muda conforme atividade, porte, tipo de licença e exigência da Secretaria.
+
+--- SLIDE 6 ---
+FLUXO INTERNO
+Tramitação dentro da Secretaria
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+06
+Receber
+Distribuir
+Analisar
+Complementar
+Vistoriar
+Parecer
+Emitir
+Fiscalizar
+Controles do painel
+prazos e vencimentos
+condicionantes
+logs de auditoria
+relatórios gerenciais
+A Secretaria mantém controle do processo sem depender de papel, planilhas soltas ou memória dos servidores.
+
+--- SLIDE 7 ---
+PERFIS E PERMISSÕES
+Separação rigorosa de acesso por função
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+07
+Público
+Consulta processos e licenças públicas, sem login.
+Empreendedor
+Solicita, envia documentos, responde pendências e acompanha seus próprios processos.
+Analista / Fiscal
+Analisa processos, solicita complementações, registra vistorias, pareceres e notificações.
+Administrador
+Gerencia usuários, permissões, atividades, taxas, modelos de documentos e parâmetros.
+Regra de segurança
+O empreendedor nunca acessa endpoints, documentos ou telas internas da gestão. A permissão precisa ser validada no back-end, não apenas escondida no front-end.
+
+--- SLIDE 8 ---
+SEGURANÇA E DADOS
+Controles mínimos para uma plataforma pública
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+08
+Autenticação
+JWT com expiração, refresh token seguro e recuperação de senha controlada.
+Proteção de dados
+Senhas com bcrypt/Argon2, LGPD, logs e restrição de acesso por perfil.
+Upload seguro
+Validação de MIME, limite de tamanho, nomes sanitizados e arquivos organizados.
+Infraestrutura
+HTTPS/SSL, CORS restrito, rate limit, backups e monitoramento da VPS.
+Documentos oficiais
+PDF com numeração, histórico, autoria, data/hora e QR Code de validação pública.
+Esses pontos devem constar como compromisso técnico da proposta e também como critério de aceite na homologação.
+
+--- SLIDE 9 ---
+ENTREGA E EVOLUÇÃO
+Divisão recomendada do escopo
+Studio Wolves • Sistema de Licenciamento e Gestão Ambiental Municipal • Buriti/MA
+09
+Fase 1 — MVP contratual
+cadastro de usuários, empreendedores e empreendimentos
+solicitação de licenças e envio de documentos
+tramitação, parecer, emissão de PDF e consulta pública
+painel da Secretaria com permissões e logs básicos
+Fase 2 — evolução
+fiscalização com fotos, GPS e agenda de vistorias
+relatórios avançados e indicadores gerenciais
+integração com DAM/boleto e sistemas tributários
+assinatura digital avançada e notificações automáticas
+Recomendação comercial: não incluir integrações externas, certificado digital ICP-Brasil e migração em massa no valor base sem orçamento separado.

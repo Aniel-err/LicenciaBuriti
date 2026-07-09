@@ -1,0 +1,5 @@
+ALTER TABLE "Inspection"
+ADD COLUMN "status" TEXT NOT NULL DEFAULT 'AGENDADA',
+ADD COLUMN "validatedAt" TIMESTAMP(3),
+ADD COLUMN "validatedBy" TEXT,
+ADD COLUMN "validationNotes" TEXT;

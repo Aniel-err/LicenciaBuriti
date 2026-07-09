@@ -1,0 +1,26 @@
+{
+  "name": "licencia-buriti",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sistema de Licenciamento e Gestao Ambiental Municipal - Buriti/MA",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "npm --workspace @licencia-buriti/web run dev",
+    "dev:api": "npm --workspace @licencia-buriti/api run dev",
+    "build": "npm --workspaces run build",
+    "lint": "npm --workspaces run lint",
+    "typecheck": "npm --workspaces run typecheck",
+    "prisma:generate": "npm --workspace @licencia-buriti/api run prisma:generate",
+    "prisma:migrate": "npm --workspace @licencia-buriti/api run prisma:migrate",
+    "seed": "npm --workspace @licencia-buriti/api run seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "playwright": "^1.61.1",
+    "typescript": "^5.9.3"
+  }
+}
