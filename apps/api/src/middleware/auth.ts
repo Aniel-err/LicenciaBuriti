@@ -2,6 +2,8 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { config } from "../config.js";
 import { prisma } from "../lib/prisma.js";
+import { errorToLog, logger } from "../security/logger.js";
+import { canRole, type PermissionAction } from "../security/permissions.js";
 
 export type AuthUser = {
   id: string;
@@ -61,7 +63,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     req.user = { id: user.id, name: user.name, email: user.email, role: user.role, entrepreneurId: user.entrepreneur?.id ?? null };
     return next();
-  } catch {
+  } catch (error) {
+    logger.warn({
+      requestId: req.requestId,
+      action: "AUTH_TOKEN_REJECTED",
+      method: req.method,
+      path: req.path,
+      error: errorToLog(error)
+    }, "auth_rejected");
     return res.status(401).json({ error: "Sessao invalida ou expirada" });
   }
 }
@@ -69,6 +78,16 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 export function allowRoles(...roles: AuthUser["role"][]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Permissao insuficiente" });
+    }
+
+    return next();
+  };
+}
+
+export function allowPermission(action: PermissionAction) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user || !canRole(req.user.role, action)) {
       return res.status(403).json({ error: "Permissao insuficiente" });
     }
 

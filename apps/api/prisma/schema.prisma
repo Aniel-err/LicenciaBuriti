@@ -29,9 +29,14 @@ enum ProcessStatus {
 }
 
 enum LicenseType {
+  LUA
+  LUAR
+  RELUA
+  AQC
   LP
   LI
   LO
+  LOC
   LAU
   REGULARIZACAO
   RENOVACAO
@@ -160,16 +165,40 @@ model Process {
   history        ProcessHistory[]
 }
 
+model ProcessSequence {
+  year       Int      @id
+  nextNumber Int      @default(1)
+  updatedAt  DateTime @updatedAt
+}
+
+model LicenseRule {
+  id                String      @id @default(cuid())
+  licenseType       LicenseType @unique
+  displayName       String
+  deadlineDays      Int         @default(30)
+  validityDays      Int         @default(365)
+  requiresInspection Boolean    @default(false)
+  requiredDocuments String[]
+  legalBasis        String?
+  isActive          Boolean     @default(true)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
 model Document {
   id          String         @id @default(cuid())
   processId   String
   name        String
   fileName    String?
   filePath    String?
+  storageKey  String?
+  fileSha256  String?
+  fileSizeBytes Int?
   mimeType    String?
   status      DocumentStatus @default(PENDENTE)
   notes       String?
   uploadedAt  DateTime?
+  version     Int            @default(0)
   process     Process        @relation(fields: [processId], references: [id])
 }
 
@@ -178,6 +207,7 @@ model IssuedDocument {
   processId   String
   type        String
   number      String      @unique
+  validationCode String?  @unique
   filePath    String?
   signedBy    String?
   issuedAt    DateTime    @default(now())
@@ -283,10 +313,15 @@ model SystemConfig {
 model AuditLog {
   id          String   @id @default(cuid())
   userId      String?
+  requestId   String?
   action      String
   entity      String
   entityId    String?
+  ip          String?
+  userAgent   String?
   metadata    Json?
+  before      Json?
+  after       Json?
   createdAt   DateTime @default(now())
   user        User?    @relation(fields: [userId], references: [id])
 }

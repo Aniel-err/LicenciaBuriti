@@ -1,6 +1,7 @@
 import { app } from "./app.js";
 import { config } from "./config.js";
+import { logger } from "./security/logger.js";
 
 app.listen(config.port, () => {
-  console.log(`API Licencia Buriti em http://localhost:${config.port}`);
+  logger.info({ port: config.port, action: "SERVER_START" }, "api_started");
 });

@@ -2,6 +2,7 @@ import type { ErrorRequestHandler, RequestHandler } from "express";
 import multer from "multer";
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
+import { errorToLog, logger } from "../security/logger.js";
 
 type ErrorBody = {
   error: string;
@@ -67,11 +68,21 @@ export const notFoundHandler: RequestHandler = (_req, res) => {
   res.status(404).json(body);
 };
 
-export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   const status = statusCodeFromError(error);
   const body: ErrorBody = {
     error: messageFromError(error, status),
     code: codeFromStatus(status)
   };
+  logger[status >= 500 ? "error" : "warn"]({
+    requestId: req.requestId,
+    userId: req.user?.id,
+    role: req.user?.role,
+    action: `ERROR ${req.method} ${req.originalUrl}`,
+    method: req.method,
+    path: req.path,
+    statusCode: status,
+    error: errorToLog(error)
+  }, "request_error");
   res.status(status).json(body);
 };

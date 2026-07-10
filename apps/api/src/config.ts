@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 const insecureJwtSecrets = new Set(["dev-secret", "troque-este-segredo-em-producao", "changeme", "secret"]);
+const isProduction = process.env.NODE_ENV === "production";
 const viteDevOrigins = [5173, 5174, 5175, 5176, 5177, 5178, 5179].flatMap((port) => [
   `http://localhost:${port}`,
   `http://127.0.0.1:${port}`
@@ -17,13 +18,19 @@ function requireJwtSecret() {
 export const config = {
   port: Number(process.env.PORT ?? 3333),
   jwtSecret: requireJwtSecret(),
-  isProduction: process.env.NODE_ENV === "production",
-  rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? (process.env.NODE_ENV === "production" ? 300 : 5000)),
-  webOrigins: Array.from(new Set([
-    ...(process.env.WEB_ORIGIN ?? "")
-      .split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean),
-    ...viteDevOrigins
-  ]))
+  isProduction,
+  rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? (isProduction ? 300 : 5000)),
+  webOrigins: (() => {
+    const origins = Array.from(new Set([
+      ...(process.env.WEB_ORIGIN ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+      ...(isProduction ? [] : viteDevOrigins)
+    ]));
+    if (isProduction && origins.length === 0) {
+      throw new Error("WEB_ORIGIN deve ser definido em producao.");
+    }
+    return origins;
+  })()
 };

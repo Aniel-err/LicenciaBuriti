@@ -4,7 +4,8 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { allowRoles, requireAuth } from "../middleware/auth.js";
 import { canChangeProcess, processScope } from "../security/access-control.js";
-import { recordAudit } from "../security/audit.js";
+import { auditContext, recordAudit } from "../security/audit.js";
+import { addDaysFromNow, findLicenseRule, nextProcessNumber, requiredDocumentsFor } from "../licensing/rules.js";
 
 export const processesRouter = Router();
 
@@ -47,12 +48,6 @@ processesRouter.post("/", requireAuth, allowRoles("ADMIN", "ANALISTA", "EMPREEND
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Dados do processo invalidos" });
 
-  const year = new Date().getFullYear();
-  const count = await prisma.process.count({ where: { number: { startsWith: `${year}.` } } });
-  const number = `${year}.${String(count + 1).padStart(6, "0")}`;
-  const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + 30);
-
   const enterprise = await prisma.enterprise.findUnique({
     where: { id: parsed.data.enterpriseId },
     include: { activity: true, entrepreneur: true }
@@ -65,32 +60,47 @@ processesRouter.post("/", requireAuth, allowRoles("ADMIN", "ANALISTA", "EMPREEND
   if (user.role === "EMPREENDEDOR" && enterprise.entrepreneur.userId !== user.id) {
     return res.status(403).json({ error: "Empreendimento fora do seu cadastro" });
   }
+  if (!enterprise.activity.requiredLicenses.includes(parsed.data.licenseType)) {
+    return res.status(400).json({ error: "Tipo de ato nao permitido para esta atividade" });
+  }
 
-  const processo = await prisma.process.create({
-    data: {
-      ...parsed.data,
-      number,
-      protocol: `BURITI-${number}`,
-      dueDate,
-      documents: {
-        create: enterprise.activity.requiredDocuments.map((name) => ({ name }))
-      },
-      history: {
-        create: {
-          status: ProcessStatus.RECEBIDO,
-          description: "Processo recebido e protocolo gerado automaticamente.",
-          actorName: req.user?.name ?? "Sistema"
+  const processo = await prisma.$transaction(async (tx) => {
+    const year = new Date().getFullYear();
+    const rule = await findLicenseRule(parsed.data.licenseType, tx);
+    const number = await nextProcessNumber(year, tx);
+    const documentNames = requiredDocumentsFor(enterprise.activity.requiredDocuments, rule?.requiredDocuments ?? []);
+
+    return tx.process.create({
+      data: {
+        ...parsed.data,
+        number,
+        protocol: `BURITI-${number}`,
+        dueDate: addDaysFromNow(rule?.deadlineDays ?? 30),
+        documents: {
+          create: documentNames.map((name) => ({ name }))
+        },
+        history: {
+          create: {
+            status: ProcessStatus.RECEBIDO,
+            description: "Processo recebido e protocolo gerado automaticamente.",
+            actorName: req.user?.name ?? "Sistema"
+          }
         }
-      }
-    },
-    include: { documents: true, history: true }
+      },
+      include: { documents: true, history: true }
+    });
   });
 
   await recordAudit(user, "PROCESS_CREATE", "Process", processo.id, {
     number: processo.number,
     entrepreneurId: parsed.data.entrepreneurId,
     enterpriseId: parsed.data.enterpriseId
-  });
+  }, auditContext(req, undefined, {
+    number: processo.number,
+    protocol: processo.protocol,
+    status: processo.status,
+    licenseType: processo.licenseType
+  }));
 
   return res.status(201).json(processo);
 });

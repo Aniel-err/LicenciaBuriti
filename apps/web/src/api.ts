@@ -630,7 +630,7 @@ export async function validateInspectionApi(token: string, inspectionId: string,
   });
 }
 
-export async function createUserApi(token: string, data: Record<string, string>, perfil: Usuario["perfil"]) {
+export async function createUserApi(token: string, data: Record<string, string>, perfil: Usuario["perfil"], entrepreneurId?: string) {
   return apiFetch<ApiUser>("/admin/users", token, {
     method: "POST",
     body: JSON.stringify({
@@ -638,7 +638,8 @@ export async function createUserApi(token: string, data: Record<string, string>,
       email: data.email,
       phone: data.telefone,
       password: data.senha,
-      role: perfilToRole(perfil)
+      role: perfilToRole(perfil),
+      entrepreneurId
     })
   });
 }

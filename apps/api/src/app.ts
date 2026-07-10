@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import { config } from "./config.js";
 import { authRouter } from "./routes/auth.js";
@@ -19,11 +18,13 @@ import { publicRouter } from "./routes/public.js";
 import { reportsRouter } from "./routes/reports.js";
 import { settingsRouter } from "./routes/settings.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
+import { requestContext } from "./middleware/request-context.js";
 
 export const app = express();
 
 app.use(helmet());
 app.use(cors({ origin: config.webOrigins }));
+app.use(requestContext);
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: config.rateLimitMax,
@@ -38,7 +39,6 @@ app.use(rateLimit({
   }
 }));
 app.use(express.json({ limit: "10mb" }));
-app.use(morgan("dev"));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/auth", authRouter);

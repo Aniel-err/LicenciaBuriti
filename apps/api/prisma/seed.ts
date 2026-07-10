@@ -2,6 +2,7 @@ import "dotenv/config";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { PrismaClient, LicenseType, ProcessStatus, UserRole } from "@prisma/client";
+import { logger } from "../src/security/logger.js";
 
 const prisma = new PrismaClient();
 
@@ -9,7 +10,10 @@ async function main() {
   const seedPassword = process.env.SEED_ADMIN_PASSWORD?.trim() || randomBytes(18).toString("base64url");
   const passwordHash = await bcrypt.hash(seedPassword, 10);
   if (!process.env.SEED_ADMIN_PASSWORD?.trim()) {
-    console.log(`Senha temporaria dos usuarios seed: ${seedPassword}`);
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SEED_ADMIN_PASSWORD deve ser definido em producao.");
+    }
+    logger.warn({ action: "SEED_TEMP_PASSWORD_CREATED" }, "seed_password_generated");
   }
 
   const [admin, analista, fiscal, empreendedorUser] = await Promise.all([
@@ -47,6 +51,113 @@ async function main() {
       requiredDocuments: ["Requerimento", "CNPJ ou CPF", "Contrato social", "Projeto ambiental", "ART", "Planta e memorial descritivo"]
     }
   });
+
+  const ruralActivity = await prisma.activity.upsert({
+    where: { code: "01.11-3" },
+    update: {},
+    create: {
+      code: "01.11-3",
+      description: "Atividades agrossilvipastoris e regularizacao rural",
+      size: "Grande",
+      pollutionLevel: "Medio",
+      requiredLicenses: [LicenseType.LUA, LicenseType.LUAR, LicenseType.RELUA, LicenseType.AQC],
+      requiredDocuments: ["Requerimento", "CPF ou CNPJ", "CAR", "ART", "Projeto ambiental", "Documento de posse", "Memorial descritivo"]
+    }
+  });
+
+  await Promise.all([
+    prisma.licenseRule.upsert({
+      where: { licenseType: LicenseType.LUA },
+      update: {},
+      create: {
+        licenseType: LicenseType.LUA,
+        displayName: "Licenca Unica Ambiental",
+        deadlineDays: 30,
+        validityDays: 1460,
+        requiresInspection: true,
+        requiredDocuments: ["CAR", "Projeto ambiental", "Memorial descritivo"],
+        legalBasis: "Lei Municipal 756/2024, art. 2"
+      }
+    }),
+    prisma.licenseRule.upsert({
+      where: { licenseType: LicenseType.LUAR },
+      update: {},
+      create: {
+        licenseType: LicenseType.LUAR,
+        displayName: "Licenca Unica Ambiental de Regularizacao",
+        deadlineDays: 45,
+        validityDays: 1460,
+        requiresInspection: true,
+        requiredDocuments: ["CAR", "PRADA", "Termo de compromisso ambiental"],
+        legalBasis: "Lei Municipal 756/2024, art. 2"
+      }
+    }),
+    prisma.licenseRule.upsert({
+      where: { licenseType: LicenseType.RELUA },
+      update: {},
+      create: {
+        licenseType: LicenseType.RELUA,
+        displayName: "Renovacao da Licenca Unica Ambiental",
+        deadlineDays: 30,
+        validityDays: 1460,
+        requiresInspection: false,
+        requiredDocuments: ["Licenca anterior", "Relatorio de cumprimento de condicionantes"],
+        legalBasis: "Lei Municipal 756/2024, art. 2"
+      }
+    }),
+    prisma.licenseRule.upsert({
+      where: { licenseType: LicenseType.AQC },
+      update: {},
+      create: {
+        licenseType: LicenseType.AQC,
+        displayName: "Autorizacao de Queima Controlada",
+        deadlineDays: 20,
+        validityDays: 180,
+        requiresInspection: true,
+        requiredDocuments: ["Croqui da area", "Autorizacao do proprietario", "Plano de controle"],
+        legalBasis: "Lei Municipal 756/2024, art. 2"
+      }
+    }),
+    prisma.licenseRule.upsert({
+      where: { licenseType: LicenseType.LI },
+      update: {},
+      create: {
+        licenseType: LicenseType.LI,
+        displayName: "Licenca de Instalacao",
+        deadlineDays: 30,
+        validityDays: 1095,
+        requiresInspection: false,
+        requiredDocuments: ["Projeto ambiental", "ART"],
+        legalBasis: "Lei Municipal 756/2024, art. 2"
+      }
+    }),
+    prisma.licenseRule.upsert({
+      where: { licenseType: LicenseType.LO },
+      update: {},
+      create: {
+        licenseType: LicenseType.LO,
+        displayName: "Licenca de Operacao",
+        deadlineDays: 30,
+        validityDays: 1460,
+        requiresInspection: true,
+        requiredDocuments: ["Relatorio de implantacao", "Comprovante de condicionantes"],
+        legalBasis: "Lei Municipal 756/2024, art. 2"
+      }
+    }),
+    prisma.licenseRule.upsert({
+      where: { licenseType: LicenseType.LOC },
+      update: {},
+      create: {
+        licenseType: LicenseType.LOC,
+        displayName: "Licenca de Operacao Corretiva",
+        deadlineDays: 45,
+        validityDays: 1095,
+        requiresInspection: true,
+        requiredDocuments: ["Relatorio ambiental", "Plano de controle corretivo"],
+        legalBasis: "Lei Municipal 756/2024, art. 2"
+      }
+    })
+  ]);
 
   const entrepreneur = await prisma.entrepreneur.upsert({
     where: { userId: empreendedorUser.id },
@@ -127,7 +238,9 @@ async function main() {
   await prisma.fee.createMany({
     data: [
       { activityId: activity.id, licenseType: LicenseType.LI, size: "Medio", amountCents: 145000 },
-      { activityId: activity.id, licenseType: LicenseType.LO, size: "Medio", amountCents: 168000 }
+      { activityId: activity.id, licenseType: LicenseType.LO, size: "Medio", amountCents: 168000 },
+      { activityId: ruralActivity.id, licenseType: LicenseType.LUA, size: "Grande", amountCents: 390000 },
+      { activityId: ruralActivity.id, licenseType: LicenseType.RELUA, size: "Grande", amountCents: 240000 }
     ],
     skipDuplicates: true
   });
@@ -184,7 +297,7 @@ async function main() {
 main()
   .then(async () => prisma.$disconnect())
   .catch(async (error) => {
-    console.error(error);
+    logger.error({ action: "SEED_FAILED", error: error instanceof Error ? error.message : "Falha ao executar seed." }, "seed_failed");
     await prisma.$disconnect();
     process.exit(1);
   });

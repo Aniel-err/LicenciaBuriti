@@ -177,13 +177,13 @@ function useStoredState() {
 
 function useStoredSession() {
   const [session, setSession] = useState<AuthSession | null>(() => {
-    const stored = localStorage.getItem(SESSION_KEY);
+    const stored = sessionStorage.getItem(SESSION_KEY);
     return stored ? (JSON.parse(stored) as AuthSession) : null;
   });
 
   useEffect(() => {
-    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    else localStorage.removeItem(SESSION_KEY);
+    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(SESSION_KEY);
   }, [session]);
 
   return [session, setSession] as const;
@@ -314,7 +314,7 @@ function LoginView({ users, onLogin, onPublic }: { users: Usuario[]; onLogin: (e
   const [senha, setSenha] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const demoUsers = users.filter((item) => item.ativo).slice(0, 4);
+  const demoUsers = import.meta.env.DEV ? users.filter((item) => item.ativo).slice(0, 4) : [];
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -353,7 +353,7 @@ function LoginView({ users, onLogin, onPublic }: { users: Usuario[]; onLogin: (e
           <h2>Perfis separados</h2>
           <p>Cada login abre somente os modulos permitidos e, no perfil empreendedor, somente os proprios processos e empreendimentos.</p>
         </div>
-        <div className="demo-accounts">
+        {demoUsers.length > 0 ? <div className="demo-accounts">
           <strong>Contas para teste</strong>
           {demoUsers.map((user) => (
             <button key={user.id} type="button" onClick={() => { setEmail(user.email); setSenha(""); }}>
@@ -362,7 +362,7 @@ function LoginView({ users, onLogin, onPublic }: { users: Usuario[]; onLogin: (e
               <small>API</small>
             </button>
           ))}
-        </div>
+        </div> : null}
       </aside>
     </main>
   );
@@ -1183,7 +1183,7 @@ function CrudList({ title, action, columns, rows, onAdd, onDelete, children }: {
   );
 }
 
-function ActionTable({ columns, rows, onDelete }: { columns: string[]; rows: Array<{ id: string; cells: string[] }>; onDelete: (id: string) => void }) {
+function ActionTable({ columns, rows, onDelete }: { columns: string[]; rows: Array<{ id: string; cells: string[]; actions?: React.ReactNode }>; onDelete?: (id: string) => void }) {
   return (
     <div className="table-shell">
       <table>
@@ -1192,7 +1192,7 @@ function ActionTable({ columns, rows, onDelete }: { columns: string[]; rows: Arr
           {rows.map((row) => (
             <tr key={row.id}>
               {row.cells.map((cell, index) => <td key={`${row.id}-${columns[index]}`} data-label={columns[index]}>{cell}</td>)}
-              <td data-label="Ações"><button className="danger-button" onClick={() => onDelete(row.id)}><Trash2 size={15} />Excluir</button></td>
+              <td data-label="Ações">{row.actions ?? (onDelete ? <button className="danger-button" onClick={() => onDelete(row.id)}><Trash2 size={15} />Excluir</button> : null)}</td>
             </tr>
           ))}
         </tbody>
@@ -1266,10 +1266,41 @@ function GenericFields({ fields, children, onSubmit }: { fields: string[]; child
 
 function InspectionPage({ state, setState, session, onRefresh }: { state: AppState; setState: React.Dispatch<React.SetStateAction<AppState>>; session: AuthSession; onRefresh: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+
+  async function validateInspection(item: Fiscalizacao) {
+    try {
+      setError("");
+      if (session.token) {
+        await validateInspectionApi(session.token, item.id, item.relatorio || "Vistoria conferida e validada.");
+        await onRefresh();
+        return;
+      }
+      setState((current) => ({
+        ...current,
+        fiscalizacoes: current.fiscalizacoes.map((inspection) => inspection.id === item.id
+          ? { ...inspection, status: "Validada", validadaEm: todayTime(), validadaPor: session.nome, conclusao: inspection.relatorio }
+          : inspection)
+      }));
+    } catch (caughtError) {
+      setError(getUserErrorMessage(caughtError, "Nao foi possivel validar a vistoria."));
+    }
+  }
+
   return (
     <main className="module-page">
       <div className="page-header"><div><h2>Fiscalização</h2><p>Agenda de vistorias, notificações e registros de campo.</p></div><button className="primary-button" onClick={() => setOpen(true)}><Plus size={17} />Nova ação</button></div>
-      <SimpleTable columns={["Processo", "Tipo", "Fiscal", "Data", "GPS", "Relatório"]} rows={state.fiscalizacoes.map((item) => [state.processos.find((p) => p.id === item.processoId)?.numero ?? "-", item.tipo, item.fiscal, item.data, item.gps, item.relatorio])} />
+      {error ? <div className="form-error" role="alert">{error}</div> : null}
+      <ActionTable
+        columns={["Processo", "Tipo", "Fiscal", "Data", "Status", "Relatório"]}
+        rows={state.fiscalizacoes.map((item) => ({
+          id: item.id,
+          cells: [state.processos.find((p) => p.id === item.processoId)?.numero ?? "-", item.tipo, item.fiscal, item.data, item.status ?? "Agendada", item.relatorio],
+          actions: item.status === "Validada"
+            ? <span className="status success">Validada</span>
+            : <button className="secondary-button" onClick={() => validateInspection(item)}><CheckCircle2 size={15} />Validar</button>
+        }))}
+      />
       {open ? <InspectionModal state={state} setState={setState} onClose={() => setOpen(false)} session={session} onRefresh={onRefresh} /> : null}
     </main>
   );
@@ -1295,7 +1326,7 @@ function UserModal({ state, setState, onClose, session, onRefresh }: { state: Ap
   const [empreendedorId, setEmpreendedorId] = useState(state.empreendedores[0]?.id ?? "");
   return (
     <Modal title="Novo usuário" onClose={onClose}>
-      <GenericFields fields={["nome", "email", "telefone", "senha"]} onSubmit={async (data) => { if (session.token) { await createUserApi(session.token, data, perfil); await onRefresh(); } else setState((s) => ({ ...s, usuarios: [{ id: uid("usr"), nome: field(data, "nome"), email: field(data, "email"), senha: field(data, "senha"), telefone: field(data, "telefone"), perfil, ativo: true, ultimoAcesso: "-", empreendedorId: perfil === "Empreendedor" ? empreendedorId : undefined }, ...s.usuarios] })); onClose(); }}>
+      <GenericFields fields={["nome", "email", "telefone", "senha"]} onSubmit={async (data) => { if (session.token) { await createUserApi(session.token, data, perfil, perfil === "Empreendedor" ? empreendedorId : undefined); await onRefresh(); } else setState((s) => ({ ...s, usuarios: [{ id: uid("usr"), nome: field(data, "nome"), email: field(data, "email"), senha: field(data, "senha"), telefone: field(data, "telefone"), perfil, ativo: true, ultimoAcesso: "-", empreendedorId: perfil === "Empreendedor" ? empreendedorId : undefined }, ...s.usuarios] })); onClose(); }}>
         <label>Perfil<select value={perfil} onChange={(e) => setPerfil(e.target.value as Usuario["perfil"])}><option>Administrador</option><option>Analista</option><option>Fiscal</option><option>Empreendedor</option></select></label>
         {perfil === "Empreendedor" ? <label>Empreendedor<select value={empreendedorId} onChange={(e) => setEmpreendedorId(e.target.value)}>{state.empreendedores.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label> : null}
       </GenericFields>

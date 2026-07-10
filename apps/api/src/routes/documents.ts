@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import path from "node:path";
 import multer from "multer";
 import { DocumentStatus } from "@prisma/client";
@@ -7,7 +7,9 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { allowRoles, requireAuth } from "../middleware/auth.js";
 import { canChangeProcess, processScope } from "../security/access-control.js";
-import { recordAudit } from "../security/audit.js";
+import { auditContext, recordAudit } from "../security/audit.js";
+import { errorToLog, logger } from "../security/logger.js";
+import { assertPdfLooksSafe, resolveDocumentFile, saveDocumentFile } from "../documents/storage.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -23,8 +25,6 @@ const upload = multer({
 
 export const documentsRouter = Router();
 
-const uploadDir = path.resolve("uploads", "documents");
-
 documentsRouter.post("/:id/upload", requireAuth, allowRoles("ADMIN", "ANALISTA", "EMPREENDEDOR"), upload.single("file"), async (req, res) => {
   const user = req.user;
   if (!user) return res.status(401).json({ error: "Autenticacao obrigatoria" });
@@ -32,6 +32,7 @@ documentsRouter.post("/:id/upload", requireAuth, allowRoles("ADMIN", "ANALISTA",
   const documentId = z.string().min(1).parse(req.params.id);
   const isPdf = req.file.buffer.subarray(0, 5).toString("utf8") === "%PDF-";
   if (!isPdf) return res.status(400).json({ error: "Arquivo invalido: envie um PDF real" });
+  assertPdfLooksSafe(req.file.buffer);
 
   const currentDocument = await prisma.document.findUnique({
     where: { id: documentId },
@@ -45,27 +46,38 @@ documentsRouter.post("/:id/upload", requireAuth, allowRoles("ADMIN", "ANALISTA",
     return res.status(403).json({ error: "Processo nao atribuido a este analista" });
   }
 
-  const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-  await mkdir(uploadDir, { recursive: true });
-  const fileName = `${Date.now()}-${safeName}`;
-  const filePath = path.join(uploadDir, fileName);
-  await writeFile(filePath, req.file.buffer);
+  const nextVersion = currentDocument.version + 1;
+  const stored = await saveDocumentFile(currentDocument.processId, documentId, nextVersion, req.file.originalname, req.file.buffer);
 
   const document = await prisma.document.update({
     where: { id: documentId },
     data: {
-      fileName: safeName,
-      filePath,
+      fileName: stored.fileName,
+      filePath: stored.filePath,
+      storageKey: stored.storageKey,
+      fileSha256: stored.fileSha256,
+      fileSizeBytes: stored.fileSizeBytes,
       mimeType: req.file.mimetype,
       status: "ENVIADO",
-      uploadedAt: new Date()
+      uploadedAt: new Date(),
+      version: nextVersion
     }
   });
 
   await recordAudit(user, "DOCUMENT_UPLOAD", "Document", documentId, {
     processId: currentDocument.processId,
-    fileName: safeName
-  });
+    fileName: stored.fileName,
+    fileSha256: stored.fileSha256,
+    fileSizeBytes: stored.fileSizeBytes,
+    version: nextVersion
+  }, auditContext(req, {
+    status: currentDocument.status,
+    version: currentDocument.version
+  }, {
+    status: document.status,
+    version: document.version,
+    fileSha256: document.fileSha256
+  }));
 
   return res.json(document);
 });
@@ -123,14 +135,23 @@ documentsRouter.get("/:id/download", requireAuth, async (req, res) => {
   });
   if (!currentDocument?.filePath) return res.status(404).json({ error: "Arquivo nao encontrado" });
 
-  const resolvedFile = path.resolve(currentDocument.filePath);
-  if (!resolvedFile.startsWith(`${uploadDir}${path.sep}`)) {
+  const resolvedFile = resolveDocumentFile(currentDocument.filePath);
+  if (!resolvedFile) {
     return res.status(404).json({ error: "Arquivo nao encontrado" });
   }
 
   try {
     await access(resolvedFile);
-  } catch {
+  } catch (error) {
+    logger.warn({
+      requestId: req.requestId,
+      userId: user.id,
+      role: user.role,
+      action: "DOCUMENT_FILE_NOT_FOUND",
+      entity: "Document",
+      entityId: documentId,
+      error: errorToLog(error)
+    }, "document_download_missing_file");
     return res.status(404).json({ error: "Arquivo nao encontrado" });
   }
 
