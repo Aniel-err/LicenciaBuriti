@@ -1,18 +1,51 @@
 # Licencia Buriti
 
-Sistema de Licenciamento e Gestao Ambiental Municipal para a Secretaria Municipal de Meio Ambiente e Turismo de Buriti/MA.
+Sistema beta de Licenciamento e Gestao Ambiental Municipal para a Secretaria Municipal de Meio Ambiente e Turismo de Buriti/MA.
 
-## Escopo inicial
+O projeto centraliza o atendimento digital de pedidos de licenca ambiental, consulta publica de processos, analise tecnica, fiscalizacao, documentos oficiais e relatorios administrativos. A modelagem foi ajustada para refletir a Lei Municipal 756 e permitir parametrizacao de regras por tipo de licenca.
 
-- Area publica para consulta de processos.
-- Area autenticada por perfis: empreendedor, analista, fiscal e administrador.
+## Status
+
+Versao beta em desenvolvimento. O sistema ja possui fluxo principal de licenciamento, trilha de auditoria, controle de perfis, validacao publica de documentos emitidos e checklist de pontos obrigatorios para producao.
+
+## Perfis de acesso
+
+- `admin`: administra usuarios, vinculos, configuracoes, regras, relatorios e operacoes sensiveis.
+- `analyst`: analisa processos, pareceres, condicionantes e documentos oficiais.
+- `fiscal`: registra e acompanha vistorias/fiscalizacoes.
+- `entrepreneur`: acompanha seus empreendimentos, processos e documentos.
+
+## Principais recursos
+
+- Area publica para consulta e validacao de documentos.
+- Login autenticado com perfis e permissoes.
 - Cadastro de empreendedores, responsaveis tecnicos e empreendimentos.
-- Solicitacao de licencas com documentos obrigatorios por atividade.
-- Gestao de processos, pareceres, condicionantes, documentos e fiscalizacao.
-- Dashboard administrativo, relatorios e controle de validade.
-- API REST em Node.js/TypeScript e PostgreSQL via Prisma.
+- Solicitacao e acompanhamento de licencas ambientais.
+- Regras parametrizadas por tipo de licenca.
+- Upload de documentos com armazenamento local, hash e versao.
+- Gestao de processos, pareceres, condicionantes e fiscalizacoes.
+- Emissao de documentos oficiais com codigo de validacao.
+- Auditoria estruturada em JSON com request ID, usuario e acao.
+- Relatorios administrativos com filtros.
 
-## Como rodar
+## Stack
+
+- Monorepo npm workspaces.
+- API REST em Node.js, Express e TypeScript.
+- Banco PostgreSQL com Prisma ORM.
+- Front-end React, TypeScript e Vite.
+- Testes de politica de seguranca no backend e frontend.
+
+## Estrutura
+
+```text
+apps/api      API, Prisma, regras, auditoria e seguranca
+apps/web      Front-end React
+docs          Checklist e documentos tecnicos
+scripts       Scripts auxiliares de build
+```
+
+## Como rodar localmente
 
 1. Instale as dependencias:
 
@@ -32,26 +65,40 @@ copy .env.example apps\api\.env
 docker compose up -d
 ```
 
-4. Crie as tabelas e carregue dados iniciais:
+4. Rode migrations, gere o Prisma Client e carregue dados iniciais:
 
 ```bash
 npm run prisma:migrate
+npm run prisma:generate
 npm run seed
 ```
 
-5. Rode a API e o front-end:
+5. Rode API e front-end:
 
 ```bash
 npm run dev
 ```
 
 Front-end: http://localhost:5173  
-API: http://localhost:3333
+API: http://localhost:3333  
+Healthcheck: http://localhost:3333/health
+
+## Validacao
+
+Comandos usados para verificar a versao beta:
+
+```bash
+npm --workspace @licencia-buriti/api run typecheck
+npm --workspace @licencia-buriti/web run typecheck
+npm --workspace @licencia-buriti/api run test:security
+npm --workspace @licencia-buriti/web run test:security
+npm run build
+```
 
 ## Usuario inicial
 
 O seed cria usuarios iniciais para desenvolvimento. Defina `SEED_ADMIN_PASSWORD` no ambiente se quiser uma senha fixa local; se deixar vazio, o seed gera uma senha temporaria e mostra no terminal.
 
-## Observacao de desenvolvimento
+## Producao
 
-O front-end possui dados de demonstracao para permitir avaliacao visual mesmo quando a API ou o banco ainda nao estiverem ativos. Quando a API responder, os dados reais substituem automaticamente a demonstracao nas telas principais.
+Antes de publicar em producao, revisar `docs/PRODUCAO_CHECKLIST.md`, configurar variaveis reais, HTTPS, origem do front-end, segredo JWT forte, backup do banco, armazenamento definitivo de documentos e politica operacional de retencao/auditoria.
