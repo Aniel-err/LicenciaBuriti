@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { stateForSession } from "../src/App.js";
+import { stateForSession } from "../src/security/access.js";
 import type { AppState } from "../src/types.js";
 
 const state: AppState = {

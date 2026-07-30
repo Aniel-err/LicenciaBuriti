@@ -99,6 +99,9 @@ async function apiFetch<T>(path: string, token: string, init: RequestInit = {}):
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("licencia:unauthorized"));
+    }
     throw new Error(await readApiError(response));
   }
 
@@ -651,6 +654,14 @@ export async function createTemplateApi(token: string, data: Record<string, stri
   });
 }
 
+export async function updateUserStatusApi(token: string, userId: string, isActive: boolean) {
+  return apiFetch(`/admin/users/${userId}/status`, token, { method: "PATCH", body: JSON.stringify({ isActive }) });
+}
+
+export async function updateTemplateStatusApi(token: string, templateId: string, isActive: boolean) {
+  return apiFetch(`/document-templates/${templateId}/status`, token, { method: "PATCH", body: JSON.stringify({ isActive }) });
+}
+
 export async function saveSettingsApi(token: string, config: Configuracao) {
   return apiFetch<ApiConfig>("/settings", token, {
     method: "PUT",
@@ -668,4 +679,27 @@ export async function saveSettingsApi(token: string, config: Configuracao) {
 export async function publicSearchApi(query: string) {
   if (query.trim().length < 5) return [];
   return publicFetch<Array<{ number: string; enterprise: string; licenseType: string; status: string; validUntil?: string | null }>>(`/public/processes?q=${encodeURIComponent(query)}`);
+}
+
+export type PublicLicense = {
+  number: string;
+  type: string;
+  issuedAt: string;
+  validUntil?: string | null;
+  signedBy?: string | null;
+  process: string;
+  protocol: string;
+  enterprise: string;
+  entrepreneur: string;
+  status: string;
+};
+
+export type PublicNews = { id: string; title: string; body: string; publishedAt: string };
+
+export async function validatePublicLicenseApi(code: string) {
+  return publicFetch<PublicLicense>(`/public/licenses/${encodeURIComponent(code.trim())}`);
+}
+
+export async function publicNewsApi() {
+  return publicFetch<PublicNews[]>("/public/news");
 }

@@ -69,6 +69,9 @@ adminRouter.patch("/users/:id/status", async (req, res) => {
   const id = z.string().min(1).parse(req.params.id);
   const parsed = z.object({ isActive: z.boolean() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Status invalido" });
+  if (req.user?.id === id && !parsed.data.isActive) {
+    return res.status(400).json({ error: "Nao e permitido desativar a propria conta" });
+  }
 
   const user = await prisma.user.update({
     where: { id },

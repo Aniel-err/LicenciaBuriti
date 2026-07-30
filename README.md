@@ -33,7 +33,7 @@ Versao beta em desenvolvimento. O sistema ja possui fluxo principal de licenciam
 - Monorepo npm workspaces.
 - API REST em Node.js, Express e TypeScript.
 - Banco PostgreSQL com Prisma ORM.
-- Front-end React, TypeScript e Vite.
+- Front-end React, TypeScript, Vite, React Router e Recharts.
 - Testes de politica de seguranca no backend e frontend.
 
 ## Estrutura
@@ -92,8 +92,11 @@ npm --workspace @licencia-buriti/api run typecheck
 npm --workspace @licencia-buriti/web run typecheck
 npm --workspace @licencia-buriti/api run test:security
 npm --workspace @licencia-buriti/web run test:security
+npm run test:e2e
 npm run build
 ```
+
+Arquitetura, rotas, componentes, perfis, responsividade e personalizacao visual estao documentados em `docs/FRONTEND_REDESIGN.md`.
 
 ## Usuario inicial
 

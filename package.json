@@ -16,9 +16,12 @@
     "typecheck": "npm --workspaces run typecheck",
     "prisma:generate": "npm --workspace @licencia-buriti/api run prisma:generate",
     "prisma:migrate": "npm --workspace @licencia-buriti/api run prisma:migrate",
-    "seed": "npm --workspace @licencia-buriti/api run seed"
+    "seed": "npm --workspace @licencia-buriti/api run seed",
+    "seed:demo": "npm --workspace @licencia-buriti/api run seed:demo",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "concurrently": "^9.2.1",
     "playwright": "^1.61.1",
     "typescript": "^5.9.3"

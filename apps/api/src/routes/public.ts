@@ -5,10 +5,10 @@ import { prisma } from "../lib/prisma.js";
 export const publicRouter = Router();
 
 function publicStatusLabel(status: string, hasLicense: boolean) {
-  if (hasLicense) return "Licenca emitida";
+  if (hasLicense) return "Licença emitida";
   const map: Record<string, string> = {
     RECEBIDO: "Recebido",
-    EM_ANALISE: "Em analise",
+    EM_ANALISE: "Em análise",
     AGUARDANDO_DOCUMENTOS: "Aguardando documentos",
     DEFERIDO: "Deferido",
     INDEFERIDO: "Indeferido",

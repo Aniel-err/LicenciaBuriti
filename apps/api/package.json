@@ -12,7 +12,8 @@
     "test:security": "tsx tests/security-policy.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "seed:demo": "tsx prisma/demo-seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.15.0",
