@@ -1,5 +1,5 @@
 import { Calendar, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, FileCheck2, FilePlus2, FilterX, MapPin, Plus, Printer, RefreshCw, Upload, XCircle } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   assignProcessApi,
@@ -83,6 +83,12 @@ function ProcessDrawer({ process, onClose }: { process: Processo; onClose(): voi
   const tabs = ["visao", "andamento", "documentos", "mensagens", "fiscalizacoes", "pareceres", "condicionantes", "oficiais", ...(session?.perfil === "Administrador" ? ["auditoria"] : [])];
   const labels: Record<string, string> = { visao: "Visão geral", andamento: "Andamento", documentos: "Documentos", mensagens: "Mensagens", fiscalizacoes: "Fiscalizações", pareceres: "Pareceres", condicionantes: "Condicionantes", oficiais: "Documentos oficiais", auditoria: "Auditoria" };
 
+  useEffect(() => {
+    if (!operationError) return;
+    const timeout = window.setTimeout(() => setOperationError(""), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [operationError]);
+
   const perform = async (name: string, action: () => Promise<unknown>, shouldRefresh = true) => {
     if (busyAction) return false;
     setBusyAction(name);
@@ -113,7 +119,7 @@ function ProcessDrawer({ process, onClose }: { process: Processo; onClose(): voi
 
   return <Modal title={`Processo ${process.numero}`} onClose={onClose}>
     <div className="drawer-summary"><StatusBadge>{process.status}</StatusBadge><span>{process.tipoLicenca}</span><span><Calendar />Prazo: {process.prazo}</span></div>
-    <div className="detail-tabs" role="tablist">{tabs.map((item) => <button role="tab" aria-selected={tab === item} className={tab === item ? "active" : ""} key={item} onClick={() => setTab(item)}>{labels[item]}</button>)}</div>
+    <div className="detail-tabs" role="tablist">{tabs.map((item) => <button role="tab" aria-selected={tab === item} className={tab === item ? "active" : ""} key={item} onClick={() => { setTab(item); setOperationError(""); }}>{labels[item]}</button>)}</div>
     <section className="detail-content">
       {operationError ? <div className="field-error" role="alert">{operationError}</div> : null}
       {tab === "visao" ? <>

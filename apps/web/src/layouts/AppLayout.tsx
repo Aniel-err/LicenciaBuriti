@@ -11,7 +11,7 @@ const groups: Array<{ label: string; items: Array<{ key: string; label: string; 
   { label: "Visão geral", items: [{ key: "dashboard", label: "Painel", icon: Gauge }] },
   { label: "Operação", items: [{ key: "processos", label: "Processos", icon: FileText }, { key: "fiscalizacao", label: "Fiscalização", icon: ShieldCheck }] },
   { label: "Cadastros", items: [{ key: "empreendedores", label: "Empreendedores", icon: Users }, { key: "responsaveis", label: "Responsáveis técnicos", icon: UserCog }, { key: "empreendimentos", label: "Empreendimentos", icon: Building2 }, { key: "atividades", label: "Atividades", icon: Archive }, { key: "taxas", label: "Taxas", icon: Landmark }] },
-  { label: "Administração", items: [{ key: "usuarios", label: "Usuários", icon: UserCog }, { key: "modelos", label: "Modelos", icon: FileCheck2 }, { key: "conteudos", label: "Conteúdo público", icon: FileText }, { key: "relatorios", label: "Relatórios", icon: Archive }, { key: "configuracoes", label: "Configurações", icon: Settings }] }
+  { label: "Administração", items: [{ key: "usuarios", label: "Usuários", icon: UserCog }, { key: "modelos", label: "Modelos de documentos", icon: FileCheck2 }, { key: "conteudos", label: "Conteúdo público", icon: FileText }, { key: "relatorios", label: "Relatórios", icon: Archive }, { key: "configuracoes", label: "Configurações", icon: Settings }] }
 ];
 
 export function AppLayout() {

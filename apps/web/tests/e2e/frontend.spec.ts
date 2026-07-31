@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const process = { id: "proc-1", number: "2026.000001", protocol: "BURITI-2026-000001", entrepreneurId: "emp-1", enterpriseId: "end-1", analyst: { name: "Ana Silva" }, licenseType: "LUA", status: "EM_ANALISE", openedAt: "2026-07-01T10:00:00.000Z", dueDate: "2026-08-01T10:00:00.000Z", documents: [], messages: [], history: [], issuedDocs: [], conditions: [] };
+const process = { id: "proc-1", number: "2026.000001", protocol: "BURITI-2026-000001", entrepreneurId: "emp-1", enterpriseId: "end-1", analyst: { name: "Ana Silva" }, licenseType: "LUA", status: "EM_ANALISE", openedAt: "2026-07-01T10:00:00.000Z", dueDate: "2026-08-01T10:00:00.000Z", documents: [{ id: "doc-missing", name: "Requerimento", status: "VALIDADO", fileName: "requerimento.pdf" }], messages: [], history: [], issuedDocs: [], conditions: [] };
 
 async function mockApi(page: Page, role = "ADMIN") {
   let inspectionValidated = false;
@@ -11,8 +11,12 @@ async function mockApi(page: Page, role = "ADMIN") {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: "insp-1", status: "VALIDADA" }) });
       return;
     }
+    if (url.pathname === "/documents/doc-missing/download") {
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "Arquivo não encontrado" }) });
+      return;
+    }
     const bodies: Record<string, unknown> = {
-      "/auth/login": { token: "test-token", user: { id: "user-1", name: "Ana Silva", email: "ana@buriti.ma.gov.br", role } },
+      "/auth/login": { token: "test-token", user: { id: "user-1", name: "Ana Silva", email: "ana@buriti.ma.gov.br", role, entrepreneurId: role === "EMPREENDEDOR" ? "emp-1" : undefined } },
       "/processes": [process],
       "/entrepreneurs": [{ id: "emp-1", personType: "PJ", name: "Empresa Buriti", cnpj: "12345678000190", legalRepresentative: "Ana", phone: "98999999999", email: "empresa@example.test", address: "Buriti/MA" }],
       "/technical-managers": [{ id: "manager-1", entrepreneurId: "emp-1", enterpriseId: "end-1", name: "Daniel Araújo", cpf: "12345678901", council: "CREA-MA", professionalId: "000002", phone: "98999999999", email: "daniel@example.test", artAvailable: false }],
@@ -52,6 +56,26 @@ test("menu respeita perfil fiscal", async ({ page }) => {
   await openMenuOnMobile(page); await expect(page.getByRole("link", { name: "Fiscalização" })).toBeVisible(); await expect(page.getByRole("link", { name: "Usuários" })).toHaveCount(0); await page.goto("/usuarios"); await expect(page).toHaveURL(/403/);
 });
 
+test("empreendedor pode solicitar e editar os próprios cadastros", async ({ page }) => {
+  await mockApi(page, "EMPREENDEDOR");
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("empresa@example.test");
+  await page.getByLabel("Senha", { exact: true }).fill("senha-segura");
+  await page.getByRole("button", { name: "Entrar" }).click();
+
+  await page.goto("/processos");
+  await expect(page.getByRole("button", { name: "Nova solicitação" })).toBeVisible();
+  await page.goto("/empreendimentos");
+  await expect(page.getByRole("button", { name: "Editar" })).toBeVisible();
+  await page.goto("/responsaveis");
+  await expect(page.getByRole("button", { name: "Editar" })).toBeVisible();
+
+  await page.goto("/modelos");
+  await expect(page).toHaveURL(/403/);
+  await page.goto("/conteudos");
+  await expect(page).toHaveURL(/403/);
+});
+
 test("consulta pública e validação", async ({ page }) => {
   await mockApi(page); await page.goto("/consulta"); await page.getByLabel("Termo de consulta").fill("2026.000001"); await expect(page.getByText("Unidade Ambiental")).toBeVisible();
   await page.goto("/validar-documento"); await page.getByLabel("Código de validação").fill("CODIGO-VALIDO-1234"); await page.getByRole("button", { name: "Validar" }).click(); await expect(page.getByText("Documento válido")).toBeVisible();
@@ -85,4 +109,18 @@ test("ações exibem retorno ao concluir, baixar sem arquivo e exportar vazio", 
   await page.getByLabel("Bairro / localidade").fill("localidade inexistente");
   await page.getByRole("button", { name: "Exportar CSV" }).click();
   await expect(page.getByRole("status")).toContainText("Não há processos no filtro atual");
+});
+
+test("aviso de documento ausente desaparece da lateral", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("ana@buriti.ma.gov.br");
+  await page.getByLabel("Senha", { exact: true }).fill("senha-segura");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.goto("/processos/proc-1");
+  await page.getByRole("tab", { name: "Documentos", exact: true }).click();
+  await page.getByRole("button", { name: "Baixar", exact: true }).click();
+  const drawerError = page.locator(".detail-content .field-error");
+  await expect(drawerError).toContainText("Arquivo não encontrado");
+  await expect(drawerError).toBeHidden({ timeout: 7000 });
 });

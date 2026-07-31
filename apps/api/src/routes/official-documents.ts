@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { createRequire } from "node:module";
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { ProcessStatus, type Prisma } from "@prisma/client";
@@ -12,6 +13,10 @@ import { prisma } from "../lib/prisma.js";
 import { allowRoles, requireAuth } from "../middleware/auth.js";
 import { canChangeProcess, processScope } from "../security/access-control.js";
 import { auditContext, recordAudit } from "../security/audit.js";
+
+const require = createRequire(import.meta.url);
+const officialFontRegular = require.resolve("@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff");
+const officialFontSemibold = require.resolve("@fontsource/noto-sans/files/noto-sans-latin-600-normal.woff");
 
 const officialTypes = ["LICENCA", "CERTIDAO", "DECLARACAO", "AUTORIZACAO", "OFICIO", "NOTIFICACAO", "PARECER"] as const;
 type OfficialType = typeof officialTypes[number];
@@ -74,40 +79,92 @@ async function renderOfficialPdf(input: {
   validationCode: string;
 }) {
   return new Promise<Buffer>((resolve, reject) => {
-    const pdf = new PDFDocument({ margin: 48, size: "A4", info: { Title: `${input.title} ${input.number}` } });
+    const pdf = new PDFDocument({
+      margin: 52,
+      size: "A4",
+      info: {
+        Title: `${input.title} ${input.number}`,
+        Author: "Prefeitura Municipal de Buriti - MA",
+        Subject: input.subject || input.title,
+        Creator: "Licencia Buriti"
+      }
+    });
     const chunks: Buffer[] = [];
     pdf.on("data", (chunk: Buffer) => chunks.push(chunk));
     pdf.on("end", () => resolve(Buffer.concat(chunks)));
     pdf.on("error", reject);
-    pdf.fontSize(10).fillColor("#51645a").text("PREFEITURA MUNICIPAL DE BURITI - MA", { align: "center" });
-    pdf.fontSize(9).text("Secretaria Municipal de Meio Ambiente e Turismo", { align: "center" });
-    pdf.moveDown(1.3);
-    pdf.fillColor("#10261b").fontSize(18).text(input.title, { align: "center" });
-    pdf.fontSize(12).text(`Nº ${input.number}`, { align: "center" });
-    pdf.moveDown(1.5);
-    pdf.fontSize(10).text(`Processo: ${input.processNumber}`);
-    pdf.text(`Protocolo: ${input.protocol}`);
-    pdf.text(`Empreendedor: ${input.entrepreneur}`);
-    pdf.text(`Empreendimento: ${input.enterprise}`);
-    pdf.text(`Ato solicitado: ${input.licenseType}`);
-    if (input.validUntil) pdf.text(`Validade: ${input.validUntil.toLocaleDateString("pt-BR")}`);
+    pdf.registerFont("NotoSans", officialFontRegular);
+    pdf.registerFont("NotoSans-Semibold", officialFontSemibold);
+    pdf.font("NotoSans");
+
+    const contentWidth = pdf.page.width - pdf.page.margins.left - pdf.page.margins.right;
+    const infoLine = (label: string, value: string) => {
+      pdf.font("NotoSans-Semibold").text(`${label}: `, { continued: true });
+      pdf.font("NotoSans").text(value);
+    };
+
+    pdf.font("NotoSans-Semibold").fontSize(10).fillColor("#486056")
+      .text("PREFEITURA MUNICIPAL DE BURITI - MA", { align: "center", characterSpacing: 0.25 });
+    pdf.font("NotoSans").fontSize(9)
+      .text("Secretaria Municipal de Meio Ambiente e Turismo", { align: "center" });
+    pdf.moveDown(0.8);
+    pdf.moveTo(pdf.page.margins.left, pdf.y)
+      .lineTo(pdf.page.width - pdf.page.margins.right, pdf.y)
+      .lineWidth(0.8)
+      .strokeColor("#b9c8c0")
+      .stroke();
+    pdf.moveDown(1.2);
+    pdf.font("NotoSans-Semibold").fillColor("#10261b").fontSize(19)
+      .text(input.title, { align: "center" });
+    pdf.font("NotoSans").fontSize(11).text(`Nº ${input.number}`, { align: "center" });
+    pdf.moveDown(1.7);
+    pdf.fontSize(9.5).fillColor("#1d2c25");
+    infoLine("Processo", input.processNumber);
+    infoLine("Protocolo", input.protocol);
+    infoLine("Empreendedor", input.entrepreneur);
+    infoLine("Empreendimento", input.enterprise);
+    infoLine("Ato solicitado", input.licenseType);
+    if (input.validUntil) infoLine("Validade", input.validUntil.toLocaleDateString("pt-BR"));
     if (input.subject) {
       pdf.moveDown();
-      pdf.fontSize(11).text(`Assunto: ${input.subject}`);
+      pdf.font("NotoSans-Semibold").fontSize(10.5).text("Assunto", { underline: true });
+      pdf.font("NotoSans").fontSize(10.5).text(input.subject);
     }
     pdf.moveDown();
-    pdf.fontSize(11).text(input.content, { align: "justify", lineGap: 3 });
+    pdf.font("NotoSans").fontSize(10.5).text(input.content, { align: "justify", lineGap: 3 });
     if (input.conditions.length) {
       pdf.moveDown();
-      pdf.fontSize(12).text("Condicionantes", { underline: true });
+      pdf.font("NotoSans-Semibold").fontSize(11).text("Condicionantes", { underline: true });
       input.conditions.forEach((condition, index) => {
-        pdf.fontSize(10).text(`${index + 1}. ${condition.description} - prazo: ${condition.dueDate.toLocaleDateString("pt-BR")}`);
+        pdf.font("NotoSans").fontSize(9.5)
+          .text(`${index + 1}. ${condition.description} - prazo: ${condition.dueDate.toLocaleDateString("pt-BR")}`);
       });
     }
-    pdf.moveDown(2);
-    pdf.fontSize(9).text(`Assinado eletronicamente por ${input.signedBy} em ${new Date().toLocaleString("pt-BR")}`, { align: "center" });
-    pdf.text(`Código de validação: ${input.validationCode}`, { align: "center" });
-    pdf.text(`Validação pública: ${config.appUrl.replace(/\/$/, "")}/validar-documento`, { align: "center" });
+    pdf.moveDown(2.4);
+    if (pdf.y > pdf.page.height - pdf.page.margins.bottom - 105) pdf.addPage();
+    const signatureY = pdf.y;
+    pdf.moveTo(pdf.page.margins.left + 82, signatureY)
+      .lineTo(pdf.page.width - pdf.page.margins.right - 82, signatureY)
+      .lineWidth(0.7)
+      .strokeColor("#9aaba2")
+      .stroke();
+    pdf.y = signatureY + 8;
+    pdf.font("NotoSans").fillColor("#25372e").fontSize(8.5)
+      .text(`Assinado eletronicamente por ${input.signedBy}`, { align: "center", width: contentWidth });
+    pdf.fontSize(8).text(`Em ${new Date().toLocaleString("pt-BR")}`, { align: "center", width: contentWidth });
+    pdf.moveDown(0.65);
+    pdf.font("NotoSans-Semibold").fontSize(8).text("Código de validação", { align: "center", width: contentWidth });
+    pdf.font("NotoSans").fontSize(7.5)
+      .text(input.validationCode, { align: "center", width: contentWidth, characterSpacing: 0.15 });
+    const validationUrl = `${config.appUrl.replace(/\/$/, "")}/validar-documento`;
+    pdf.moveDown(0.4);
+    pdf.fillColor("#146c4a").fontSize(7.5)
+      .text(`Validação pública: ${validationUrl}`, {
+        align: "center",
+        width: contentWidth,
+        link: validationUrl,
+        underline: true
+      });
     pdf.end();
   });
 }
