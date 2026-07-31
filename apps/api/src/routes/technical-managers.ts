@@ -28,6 +28,21 @@ const managerSchema = z.object({
 
 export const technicalManagersRouter = Router();
 
+async function serializeManager<T extends { artDocument?: string | null }>(manager: T) {
+  const { artDocument, ...safeManager } = manager;
+  const resolved = resolveManagedFile(artDocument);
+  let artAvailable = false;
+  if (resolved) {
+    try {
+      await access(resolved);
+      artAvailable = true;
+    } catch {
+      artAvailable = false;
+    }
+  }
+  return { ...safeManager, artAvailable };
+}
+
 technicalManagersRouter.get("/", requireAuth, async (req, res) => {
   const user = req.user;
   if (!user) return res.status(401).json({ error: "Autenticacao obrigatoria" });
@@ -43,7 +58,7 @@ technicalManagersRouter.get("/", requireAuth, async (req, res) => {
     },
     orderBy: { name: "asc" }
   });
-  return res.json(managers);
+  return res.json(await Promise.all(managers.map(serializeManager)));
 });
 
 technicalManagersRouter.post("/", requireAuth, allowRoles("ADMIN", "ANALISTA", "EMPREENDEDOR"), async (req, res) => {
@@ -71,7 +86,7 @@ technicalManagersRouter.post("/", requireAuth, allowRoles("ADMIN", "ANALISTA", "
     entrepreneurId: manager.entrepreneurId,
     enterpriseId: manager.enterpriseId
   });
-  return res.status(201).json(manager);
+  return res.status(201).json(await serializeManager(manager));
 });
 
 technicalManagersRouter.patch("/:id", requireAuth, allowRoles("ADMIN", "ANALISTA", "EMPREENDEDOR"), async (req, res) => {
@@ -102,7 +117,7 @@ technicalManagersRouter.patch("/:id", requireAuth, allowRoles("ADMIN", "ANALISTA
     entrepreneurId: manager.entrepreneurId,
     enterpriseId: manager.enterpriseId
   });
-  return res.json(manager);
+  return res.json(await serializeManager(manager));
 });
 
 technicalManagersRouter.post("/:id/art", requireAuth, allowRoles("ADMIN", "ANALISTA", "EMPREENDEDOR"), upload.single("file"), async (req, res) => {
@@ -127,7 +142,7 @@ technicalManagersRouter.post("/:id/art", requireAuth, allowRoles("ADMIN", "ANALI
     fileSha256: stored.fileSha256,
     fileSizeBytes: stored.fileSizeBytes
   });
-  return res.json(manager);
+  return res.json(await serializeManager(manager));
 });
 
 technicalManagersRouter.get("/:id/art", requireAuth, async (req, res) => {
@@ -138,12 +153,16 @@ technicalManagersRouter.get("/:id/art", requireAuth, async (req, res) => {
     where: { id, entrepreneur: entrepreneurScope(user) },
     select: { artDocument: true }
   });
+  if (!manager) return res.status(404).json({ error: "Responsável técnico não encontrado" });
+  if (!manager.artDocument) {
+    return res.status(404).json({ error: "Nenhuma ART foi anexada a este responsável técnico." });
+  }
   const resolved = resolveManagedFile(manager?.artDocument);
-  if (!resolved) return res.status(404).json({ error: "ART nao encontrada" });
+  if (!resolved) return res.status(404).json({ error: "A ART cadastrada não está disponível. Envie o arquivo novamente." });
   try {
     await access(resolved);
   } catch {
-    return res.status(404).json({ error: "ART nao encontrada" });
+    return res.status(404).json({ error: "A ART cadastrada não está disponível. Envie o arquivo novamente." });
   }
   await recordAudit(user, "TECHNICAL_MANAGER_ART_DOWNLOAD", "TechnicalManager", id);
   return res.download(resolved, path.basename(resolved));

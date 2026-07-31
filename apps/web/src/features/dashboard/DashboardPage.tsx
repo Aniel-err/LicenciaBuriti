@@ -1,9 +1,9 @@
-import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, FileText, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, FileText, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { getDashboardApi, type DashboardData } from "../../api";
+import { getDashboardApi, getUserErrorMessage, type DashboardData } from "../../api";
 import { useApp } from "../../app/providers";
-import { PageHeader, Skeleton, StatusBadge } from "../../components/ui";
+import { Button, PageHeader, Skeleton, StatusBadge } from "../../components/ui";
 
 const colors = ["#0b6b45", "#d8aa32", "#087f8c", "#15803d", "#b42318", "#687970"];
 const statusNames: Record<string, string> = {
@@ -22,20 +22,27 @@ const statusNames: Record<string, string> = {
 export function DashboardPage() {
   const { state, session } = useApp();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [dashboardError, setDashboardError] = useState("");
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     if (!session) return;
-    void getDashboardApi(session.token).then(setDashboard);
-  }, [session?.token, state.processos.length, state.fiscalizacoes.length]);
+    let active = true;
+    setDashboardError("");
+    void getDashboardApi(session.token)
+      .then((data) => { if (active) setDashboard(data); })
+      .catch((cause) => { if (active) setDashboardError(getUserErrorMessage(cause, "Não foi possível carregar os indicadores.")); });
+    return () => { active = false; };
+  }, [session?.token, state.processos.length, state.fiscalizacoes.length, reload]);
   if (!session) return null;
-  if (!dashboard) return <Skeleton rows={7} />;
-
-  const chart = dashboard.groups.status.map((item) => ({ name: statusNames[item.name] ?? item.name, value: item.count }));
-  const inspections = state.fiscalizacoes.filter((item) => item.status !== "Validada").length;
   const roleIntro = session.perfil === "Empreendedor"
     ? "Acompanhe suas solicitações, documentos e prazos de renovação."
     : session.perfil === "Fiscal"
       ? "Organize vistorias e ações de campo sob sua responsabilidade."
       : "Acompanhe indicadores, responsáveis e prioridades da operação.";
+  if (!dashboard) return <><PageHeader title={`Olá, ${session.nome.split(" ")[0] ?? ""}`} description={roleIntro} />{dashboardError ? <div className="field-error" role="alert">{dashboardError}<br /><Button variant="secondary" onClick={() => setReload((value) => value + 1)}><RefreshCw />Tentar novamente</Button></div> : <Skeleton rows={7} />}</>;
+
+  const chart = dashboard.groups.status.map((item) => ({ name: statusNames[item.name] ?? item.name, value: item.count }));
+  const inspections = state.fiscalizacoes.filter((item) => item.status !== "Validada").length;
   const metrics = [
     { label: session.perfil === "Analista" ? "Processos atribuídos" : "Total de processos", value: dashboard.metrics.total, icon: FileText },
     { label: "Aguardando documentos", value: dashboard.metrics.aguardando, icon: ClipboardCheck },
@@ -45,6 +52,7 @@ export function DashboardPage() {
     { label: "Fiscalizações abertas", value: inspections, icon: ShieldCheck }
   ];
   return <><PageHeader title={`Olá, ${session.nome.split(" ")[0] ?? ""}`} description={roleIntro} />
+    {dashboardError ? <div className="field-error" role="alert">{dashboardError} <Button variant="secondary" onClick={() => setReload((value) => value + 1)}><RefreshCw />Tentar novamente</Button></div> : null}
     <section className="metrics-grid" aria-label="Indicadores">{metrics.map(({ label, value, icon: Icon }) => <article className="metric" key={label}><Icon /><div><strong>{value}</strong><span>{label}</span></div></article>)}</section>
     <section className="dashboard-grid">
       <article className="chart-panel"><header><div><h2>Processos por situação</h2><p>Distribuição dos processos visíveis no seu perfil.</p></div></header>{chart.length ? <div className="chart-layout"><div className="chart-box" aria-hidden="true"><ResponsiveContainer><PieChart><Pie data={chart} dataKey="value" nameKey="name" innerRadius={58} outerRadius={84} paddingAngle={3}>{chart.map((entry, index) => <Cell key={entry.name} fill={colors[index % colors.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer></div><ul className="chart-legend">{chart.map((item, index) => <li key={item.name}><i style={{ background: colors[index % colors.length] }} /><span>{item.name}</span><strong>{item.value}</strong></li>)}</ul></div> : <p>Sem dados para o gráfico.</p>}</article>

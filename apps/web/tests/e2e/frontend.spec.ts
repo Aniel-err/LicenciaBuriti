@@ -3,16 +3,22 @@ import { expect, test, type Page } from "@playwright/test";
 const process = { id: "proc-1", number: "2026.000001", protocol: "BURITI-2026-000001", entrepreneurId: "emp-1", enterpriseId: "end-1", analyst: { name: "Ana Silva" }, licenseType: "LUA", status: "EM_ANALISE", openedAt: "2026-07-01T10:00:00.000Z", dueDate: "2026-08-01T10:00:00.000Z", documents: [], messages: [], history: [], issuedDocs: [], conditions: [] };
 
 async function mockApi(page: Page, role = "ADMIN") {
+  let inspectionValidated = false;
   await page.route("http://localhost:3333/**", async (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname === "/inspections/insp-1/validate" && route.request().method() === "PATCH") {
+      inspectionValidated = true;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: "insp-1", status: "VALIDADA" }) });
+      return;
+    }
     const bodies: Record<string, unknown> = {
       "/auth/login": { token: "test-token", user: { id: "user-1", name: "Ana Silva", email: "ana@buriti.ma.gov.br", role } },
       "/processes": [process],
       "/entrepreneurs": [{ id: "emp-1", personType: "PJ", name: "Empresa Buriti", cnpj: "12345678000190", legalRepresentative: "Ana", phone: "98999999999", email: "empresa@example.test", address: "Buriti/MA" }],
-      "/technical-managers": [],
+      "/technical-managers": [{ id: "manager-1", entrepreneurId: "emp-1", enterpriseId: "end-1", name: "Daniel Araújo", cpf: "12345678901", council: "CREA-MA", professionalId: "000002", phone: "98999999999", email: "daniel@example.test", artAvailable: false }],
       "/enterprises": [{ id: "end-1", entrepreneurId: "emp-1", name: "Unidade Ambiental", address: "Centro", municipality: "Buriti - MA", latitude: -3.9, longitude: -42.9, activityId: "act-1", areaHectares: 1, size: "Médio", pollutionLevel: "Médio", propertyClass: "Urbano" }],
       "/catalog/activities": [{ id: "act-1", code: "01", description: "Atividade", size: "Médio", pollutionLevel: "Médio", requiredLicenses: ["LUA"], requiredDocuments: ["Requerimento"] }],
-      "/catalog/fees": [], "/inspections": [], "/document-templates": [], "/institutional/content": [], "/institutional/news": [], "/notifications": [], "/admin/users": [], "/admin/audit": [],
+      "/catalog/fees": [], "/inspections": [{ id: "insp-1", processId: "proc-1", type: "VISTORIA", scheduledAt: "2026-08-03T10:00:00.000Z", latitude: -3.9, longitude: -42.9, report: "Vistoria técnica agendada.", fiscalName: "Juliana Pereira", status: inspectionValidated ? "VALIDADA" : "AGENDADA", validatedAt: inspectionValidated ? "2026-07-30T10:00:00.000Z" : null, validatedBy: inspectionValidated ? "Ana Silva" : null, validationNotes: inspectionValidated ? "Fiscalização concluída sem irregularidades." : null, attachments: [] }], "/document-templates": [], "/institutional/content": [], "/institutional/news": [], "/notifications": [], "/admin/users": [], "/admin/audit": [{ id: "audit-1", createdAt: "2026-07-30T10:00:00.000Z", user: { name: "Ana Silva" }, action: "LOGIN", entity: "Sessao", entityId: "user-1" }],
       "/dashboard": {
         metrics: { total: 1, emAnalise: 1, aguardando: 0, deferidos: 0, indeferidos: 0, emitidas: 0, vencendo: 0, vencidas: 0 },
         groups: { status: [{ name: "EM_ANALISE", count: 1 }], analyst: [{ name: "Ana Silva", count: 1 }], activity: [{ name: "Atividade", count: 1 }], month: [{ name: "2026-07", count: 1 }] },
@@ -53,4 +59,30 @@ test("consulta pública e validação", async ({ page }) => {
 
 test("layout não causa overflow horizontal", async ({ page }) => {
   await page.goto("/login"); const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth); expect(overflow).toBe(false);
+});
+
+test("ações exibem retorno ao concluir, baixar sem arquivo e exportar vazio", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill("ana@buriti.ma.gov.br");
+  await page.getByLabel("Senha", { exact: true }).fill("senha-segura");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page.getByText("Acesso ao sistema")).toBeVisible();
+
+  await page.goto("/responsaveis");
+  await page.getByRole("button", { name: "Baixar" }).click();
+  await expect(page.getByRole("status")).toContainText("Nenhuma ART está disponível");
+
+  await page.goto("/fiscalizacao");
+  await page.getByRole("button", { name: "Concluir" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Concluir fiscalização");
+  await page.getByLabel("Conclusão").fill("Fiscalização concluída sem irregularidades.");
+  await page.getByRole("button", { name: "Confirmar conclusão" }).click();
+  await expect(page.getByRole("status")).toContainText("Fiscalização concluída");
+  await expect(page.getByText("Validada")).toBeVisible();
+
+  await page.goto("/relatorios");
+  await page.getByLabel("Bairro / localidade").fill("localidade inexistente");
+  await page.getByRole("button", { name: "Exportar CSV" }).click();
+  await expect(page.getByRole("status")).toContainText("Não há processos no filtro atual");
 });

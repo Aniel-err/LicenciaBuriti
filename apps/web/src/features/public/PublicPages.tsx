@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { downloadPublicLicenseApi, getUserErrorMessage, publicInstitutionalContentApi, publicNewsApi, publicSearchApi, validatePublicLicenseApi, type PublicInstitutionalContent, type PublicLicense, type PublicNews } from "../../api";
 import { Button, EmptyState, Skeleton, StatusBadge } from "../../components/ui";
+import { saveBlob } from "../../utils/download";
 
 export function PublicHome() {
   return <div className="public-home"><section className="public-intro"><div><h1>Licenciamento ambiental de Buriti</h1><p>Consulte processos e valide documentos emitidos pela Secretaria Municipal de Meio Ambiente e Turismo.</p><div><Link className="button button--primary" to="/consulta"><Search />Consultar processo</Link><Link className="button button--secondary" to="/validar-documento"><ShieldCheck />Validar documento</Link></div></div><Leaf className="public-intro__icon" aria-hidden="true" /></section><section className="public-services"><article><FileSearch /><h2>Consulta pública</h2><p>Acompanhe situação, empreendimento e tipo de licença usando número, protocolo, CPF ou CNPJ.</p></article><article><CheckCircle2 /><h2>Validação</h2><p>Confirme autenticidade somente pela resposta positiva do código de validação.</p></article><article><Newspaper /><h2>Transparência</h2><p>Acesse comunicados públicos sobre licenciamento ambiental municipal.</p></article></section><NewsSection /></div>;
@@ -19,13 +20,7 @@ export function PublicSearchPage() {
   useEffect(() => { const current = ++request.current; if (query.trim().length < 5) { setRows([]); setLoading(false); return; } setLoading(true); const timer = window.setTimeout(() => publicSearchApi(query).then((result) => { if (current === request.current) setRows(result); }).catch((cause) => { if (current === request.current) setError(getUserErrorMessage(cause)); }).finally(() => { if (current === request.current) setLoading(false); }), 500); return () => window.clearTimeout(timer); }, [query]);
   const download = async (code: string, number?: string | null) => {
     try {
-      const blob = await downloadPublicLicenseApi(code);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${number ?? "documento-ambiental"}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
+      saveBlob(await downloadPublicLicenseApi(code), `${number ?? "documento-ambiental"}.pdf`);
     } catch (cause) {
       setError(getUserErrorMessage(cause));
     }
@@ -54,13 +49,7 @@ export function LicenseValidationPage() {
   };
   const download = async () => {
     try {
-      const blob = await downloadPublicLicenseApi(code);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${result?.number ?? "documento-ambiental"}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
+      saveBlob(await downloadPublicLicenseApi(code), `${result?.number ?? "documento-ambiental"}.pdf`);
     } catch (cause) {
       setError(getUserErrorMessage(cause));
     }

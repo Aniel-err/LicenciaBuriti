@@ -1,7 +1,7 @@
 import { Archive, Bell, Building2, ChevronLeft, FileCheck2, FileText, Gauge, Landmark, LogOut, Menu, Settings, ShieldCheck, UserCog, Users, X } from "lucide-react";
 import { useEffect, useRef, useState, type ElementType } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { markAllNotificationsReadApi, markNotificationReadApi } from "../api";
+import { getUserErrorMessage, markAllNotificationsReadApi, markNotificationReadApi } from "../api";
 import { useApp } from "../app/providers";
 import { routeMeta } from "../app/routes";
 import { Brand } from "../components/Brand";
@@ -15,7 +15,7 @@ const groups: Array<{ label: string; items: Array<{ key: string; label: string; 
 ];
 
 export function AppLayout() {
-  const { session, state, logout, error, clearError, refresh } = useApp();
+  const { session, state, logout, error, clearError, refresh, notice, notify, clearNotice } = useApp();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -35,15 +35,24 @@ export function AppLayout() {
   }, []);
   const openNotification = async (id: string, processId?: string) => {
     if (!session) return;
-    await markNotificationReadApi(session.token, id);
-    await refresh();
-    setNotificationsOpen(false);
-    if (processId) navigate(`/processos/${processId}`);
+    try {
+      await markNotificationReadApi(session.token, id);
+      await refresh();
+      setNotificationsOpen(false);
+      if (processId) navigate(`/processos/${processId}`);
+    } catch (cause) {
+      notify(getUserErrorMessage(cause, "Não foi possível abrir a notificação."), "error");
+    }
   };
   const markAllRead = async () => {
     if (!session) return;
-    await markAllNotificationsReadApi(session.token);
-    await refresh();
+    try {
+      await markAllNotificationsReadApi(session.token);
+      await refresh();
+      notify("Todas as notificações foram marcadas como lidas.");
+    } catch (cause) {
+      notify(getUserErrorMessage(cause, "Não foi possível atualizar as notificações."), "error");
+    }
   };
   if (!session) return null;
   return <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
@@ -76,6 +85,7 @@ export function AppLayout() {
         </div>
       </header>
       {error ? <div className="app-alert" role="alert"><span>{error}</span><button onClick={clearError} aria-label="Fechar aviso"><X /></button></div> : null}
+      {notice ? <div className={`app-alert app-alert--${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}><span>{notice.message}</span><button onClick={clearNotice} aria-label="Fechar mensagem"><X /></button></div> : null}
       <div className="page"><Outlet /></div>
     </main>
   </div>;

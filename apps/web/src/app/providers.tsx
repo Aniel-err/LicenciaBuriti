@@ -14,12 +14,15 @@ type AppContextValue = {
   state: AppState;
   loading: boolean;
   error: string;
+  notice: { message: string; tone: "success" | "warning" | "error" } | null;
   login(email: string, password: string): Promise<void>;
   register(data: Record<string, string>): Promise<void>;
   logout(): void;
   refresh(): Promise<void>;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
   clearError(): void;
+  notify(message: string, tone?: "success" | "warning" | "error"): void;
+  clearNotice(): void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -39,6 +42,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [rawState, setState] = useState<AppState>(() => mockEnabled ? devState : emptyState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState<AppContextValue["notice"]>(null);
 
   const logout = () => {
     sessionStorage.removeItem(SESSION_KEY);
@@ -73,10 +77,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("licencia:unauthorized", expire);
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   useEffect(() => { if (session) void refresh(); }, [session?.token]);
 
   const state = useMemo(() => session ? stateForSession(rawState, session) : rawState, [rawState, session]);
-  const value = useMemo<AppContextValue>(() => ({ session, state, loading, error, login, register, logout, refresh, setState, clearError: () => setError("") }), [session, state, loading, error]);
+  const value = useMemo<AppContextValue>(() => ({
+    session,
+    state,
+    loading,
+    error,
+    notice,
+    login,
+    register,
+    logout,
+    refresh,
+    setState,
+    clearError: () => setError(""),
+    notify: (message, tone = "success") => setNotice({ message, tone }),
+    clearNotice: () => setNotice(null)
+  }), [session, state, loading, error, notice]);
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 

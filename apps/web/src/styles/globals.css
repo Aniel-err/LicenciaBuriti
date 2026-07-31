@@ -72,6 +72,9 @@ label { display: grid; gap: 6px; color: #32423a; font-size: 13px; font-weight: 7
 .page-actions { display: flex; gap: 8px; }
 .app-alert { display: flex; justify-content: space-between; align-items: center; color: #712018; border-bottom: 1px solid #efc2be; background: #fff0ef; padding: 10px 24px; }
 .app-alert button { border: 0; color: inherit; background: transparent; }
+.app-alert--success { color: #075c38; border-color: #a9d9c1; background: #eaf7f0; }
+.app-alert--warning { color: #714500; border-color: #edd39a; background: #fff7e5; }
+.app-alert--error { color: #712018; border-color: #efc2be; background: #fff0ef; }
 .metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin-bottom: 18px; }
 .metric { min-height: 104px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--color-border); border-radius: var(--radius); background: white; padding: 18px; box-shadow: var(--shadow-sm); }
 .metric > svg { width: 38px; height: 38px; border-radius: var(--radius); color: var(--color-primary-700); background: #eaf4ee; padding: 8px; }

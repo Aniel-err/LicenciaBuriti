@@ -59,6 +59,16 @@ async function friendlyFetch(input: RequestInfo | URL, init?: RequestInit) {
   }
 }
 
+async function readDownload(response: Response, fallback: string) {
+  if (!response.ok) throw new Error(await readApiError(response, fallback));
+  if (response.headers.get("content-type")?.includes("application/json")) {
+    throw new Error(await readApiError(response, fallback));
+  }
+  const blob = await response.blob();
+  if (blob.size === 0) throw new Error("O arquivo está vazio ou não está disponível para download.");
+  return blob;
+}
+
 export function getUserErrorMessage(error: unknown, fallback = DEFAULT_API_ERROR) {
   if (error instanceof Error && error.message.trim()) return error.message;
   return fallback;
@@ -243,7 +253,7 @@ type ApiTechnicalManager = {
   cpf: string;
   council?: string | null;
   professionalId: string;
-  artDocument?: string | null;
+  artAvailable?: boolean;
   phone: string;
   email: string;
 };
@@ -485,7 +495,7 @@ function mapTechnicalManager(item: ApiTechnicalManager): ResponsavelTecnico {
     registroProfissional: item.professionalId,
     telefone: item.phone,
     email: item.email,
-    artDisponivel: Boolean(item.artDocument)
+    artDisponivel: Boolean(item.artAvailable)
   };
 }
 
@@ -676,6 +686,93 @@ function mapNotification(item: ApiNotification): Notificacao {
   };
 }
 
+const auditActionLabels: Record<string, string> = {
+  LOGIN: "Acesso ao sistema",
+  PUBLIC_REGISTER: "Cadastro público realizado",
+  PASSWORD_RESET_REQUEST: "Recuperação de senha solicitada",
+  PASSWORD_RESET: "Senha redefinida",
+  PASSWORD_CHANGE: "Senha alterada",
+  USER_CREATE: "Usuário cadastrado",
+  USER_UPDATE: "Usuário atualizado",
+  USER_STATUS: "Status do usuário alterado",
+  ACTIVITY_CREATE: "Atividade cadastrada",
+  ACTIVITY_UPDATE: "Atividade atualizada",
+  FEE_CREATE: "Taxa cadastrada",
+  FEE_UPDATE: "Taxa atualizada",
+  FEE_DELETE: "Taxa excluída",
+  LICENSE_RULE_UPDATE: "Regra de licenciamento atualizada",
+  TEMPLATE_CREATE: "Modelo cadastrado",
+  TEMPLATE_UPDATE: "Modelo atualizado",
+  TEMPLATE_DELETE: "Modelo excluído",
+  TEMPLATE_STATUS: "Status do modelo alterado",
+  DOCUMENT_UPLOAD: "Documento enviado",
+  DOCUMENT_STATUS: "Documento analisado",
+  DOCUMENT_DOWNLOAD: "Documento baixado",
+  DOCUMENT_REQUEST: "Documento complementar solicitado",
+  ENTERPRISE_CREATE: "Empreendimento cadastrado",
+  ENTERPRISE_UPDATE: "Empreendimento atualizado",
+  ENTREPRENEUR_CREATE: "Empreendedor cadastrado",
+  ENTREPRENEUR_UPDATE: "Empreendedor atualizado",
+  INSPECTION_CREATE: "Fiscalização agendada",
+  INSPECTION_UPDATE: "Fiscalização atualizada",
+  INSPECTION_ATTACHMENTS_UPLOAD: "Anexos da fiscalização enviados",
+  INSPECTION_ATTACHMENT_DOWNLOAD: "Anexo da fiscalização baixado",
+  INSPECTION_VALIDATE: "Fiscalização concluída",
+  INSTITUTIONAL_CONTENT_CREATE: "Conteúdo público cadastrado",
+  INSTITUTIONAL_CONTENT_UPDATE: "Conteúdo público atualizado",
+  INSTITUTIONAL_CONTENT_DELETE: "Conteúdo público excluído",
+  NEWS_CREATE: "Notícia cadastrada",
+  NEWS_UPDATE: "Notícia atualizada",
+  NEWS_DELETE: "Notícia excluída",
+  NOTIFICATION_READ: "Notificação lida",
+  NOTIFICATION_READ_ALL: "Todas as notificações foram lidas",
+  NOTIFICATION_SWEEP: "Alertas automáticos verificados",
+  OFFICIAL_DOCUMENT_ISSUE: "Documento oficial emitido",
+  OFFICIAL_DOCUMENT_DOWNLOAD: "Documento oficial baixado",
+  PROCESS_CREATE: "Processo protocolado",
+  PROCESS_ASSIGN: "Processo distribuído",
+  PROCESS_STATUS: "Situação do processo alterada",
+  PROCESS_MESSAGE: "Mensagem enviada no processo",
+  PROCESS_OPINION: "Parecer técnico registrado",
+  PROCESS_REVIEW: "Processo revisado",
+  PROCESS_RENEW: "Renovação solicitada",
+  CONDITION_CREATE: "Condicionante cadastrada",
+  CONDITION_STATUS: "Situação da condicionante alterada",
+  CONDITION_DELETE: "Condicionante excluída",
+  SETTINGS_UPDATE: "Configurações atualizadas",
+  TECHNICAL_MANAGER_CREATE: "Responsável técnico cadastrado",
+  TECHNICAL_MANAGER_UPDATE: "Responsável técnico atualizado",
+  TECHNICAL_MANAGER_ART_UPLOAD: "ART enviada",
+  TECHNICAL_MANAGER_ART_DOWNLOAD: "ART baixada",
+  TECHNICAL_MANAGER_DELETE: "Responsável técnico excluído"
+};
+
+const auditEntityLabels: Record<string, string> = {
+  Activity: "Atividade",
+  Condition: "Condicionante",
+  Document: "Documento do processo",
+  DocumentTemplate: "Modelo de documento",
+  Enterprise: "Empreendimento",
+  Entrepreneur: "Empreendedor",
+  Fee: "Taxa",
+  Inspection: "Fiscalização",
+  InspectionAttachment: "Anexo da fiscalização",
+  InstitutionalContent: "Conteúdo público",
+  IssuedDocument: "Documento oficial",
+  LicenseRule: "Regra de licenciamento",
+  News: "Notícia",
+  Notification: "Notificação",
+  Process: "Processo",
+  Sessao: "Sessão",
+  SystemConfig: "Configuração do sistema",
+  TechnicalManager: "Responsável técnico",
+  User: "Usuário"
+};
+
+function readableAuditValue(value: string, labels: Record<string, string>) {
+  return labels[value] ?? value.replaceAll("_", " ").toLocaleLowerCase("pt-BR").replace(/^\p{L}/u, (letter) => letter.toLocaleUpperCase("pt-BR"));
+}
+
 export async function loadAppState(token: string, perfil: Perfil, current: AppState): Promise<AppState> {
   const [processes, entrepreneurs, technicalManagers, enterprises, activities, fees, inspections, config, templates, contents, news, users, audit, notifications] = await Promise.all([
     apiFetch<ApiProcess[]>("/processes", token),
@@ -711,8 +808,8 @@ export async function loadAppState(token: string, perfil: Perfil, current: AppSt
       id: item.id,
       data: formatDateTime(item.createdAt),
       usuario: item.user?.name ?? item.user?.email ?? "Sistema",
-      acao: item.action,
-      entidade: item.entity,
+      acao: readableAuditValue(item.action, auditActionLabels),
+      entidade: readableAuditValue(item.entity, auditEntityLabels),
       detalhe: item.entityId ?? "-"
     })),
     notificacoes: notifications.map(mapNotification)
@@ -802,8 +899,7 @@ export async function downloadDocumentApi(token: string, documentId: string) {
   const response = await friendlyFetch(`${API_BASE_URL}/documents/${documentId}/download`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar o documento."));
-  return response.blob();
+  return readDownload(response, "Não foi possível baixar o documento.");
 }
 
 export async function issueLicenseApi(token: string, processId: string) {
@@ -814,10 +910,7 @@ export async function issueLicenseApi(token: string, processId: string) {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ validUntil: validUntil.toISOString(), conditions: [] })
   });
-  if (!response.ok) {
-    throw new Error(await readApiError(response, "Nao foi possivel emitir a licenca."));
-  }
-  return response.blob();
+  return readDownload(response, "Não foi possível emitir a licença.");
 }
 
 export async function createEntrepreneurApi(token: string, data: Record<string, string>) {
@@ -1048,8 +1141,7 @@ export async function downloadInspectionAttachmentApi(token: string, attachmentI
   const response = await friendlyFetch(`${API_BASE_URL}/inspections/attachments/${attachmentId}/download`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar o anexo."));
-  return response.blob();
+  return readDownload(response, "Não foi possível baixar o anexo.");
 }
 
 export async function createTechnicalManagerApi(token: string, data: Record<string, string>, artFile?: File) {
@@ -1100,8 +1192,7 @@ export async function downloadTechnicalManagerArtApi(token: string, managerId: s
   const response = await friendlyFetch(`${API_BASE_URL}/technical-managers/${managerId}/art`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar a ART."));
-  return response.blob();
+  return readDownload(response, "Não foi possível baixar a ART.");
 }
 
 export async function issueOfficialDocumentApi(token: string, processId: string, data: {
@@ -1116,16 +1207,14 @@ export async function issueOfficialDocumentApi(token: string, processId: string,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(data)
   });
-  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel emitir o documento oficial."));
-  return response.blob();
+  return readDownload(response, "Não foi possível emitir o documento oficial.");
 }
 
 export async function downloadIssuedDocumentApi(token: string, documentId: string) {
   const response = await friendlyFetch(`${API_BASE_URL}/official-documents/${documentId}/download`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar o documento emitido."));
-  return response.blob();
+  return readDownload(response, "Não foi possível baixar o documento emitido.");
 }
 
 export async function createConditionApi(token: string, processId: string, description: string, dueDate: string, notes?: string) {
@@ -1251,8 +1340,7 @@ export async function validatePublicLicenseApi(code: string) {
 
 export async function downloadPublicLicenseApi(code: string) {
   const response = await friendlyFetch(`${API_BASE_URL}/public/licenses/${encodeURIComponent(code.trim())}/download`);
-  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar o documento."));
-  return response.blob();
+  return readDownload(response, "Não foi possível baixar o documento.");
 }
 
 export async function publicNewsApi() {
