@@ -2,6 +2,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import {
   DocumentStatus,
+  InstitutionalContentType,
   InspectionType,
   LicenseType,
   PersonType,
@@ -81,7 +82,7 @@ async function main() {
   const activitySeeds = {
     construction: {
       code: "41.20-4",
-      description: "Construcao de edificios e loteamentos urbanos",
+      description: "Construção de edifícios e loteamentos urbanos",
       size: "Medio",
       pollutionLevel: "Medio",
       requiredLicenses: [LicenseType.LP, LicenseType.LI, LicenseType.LO],
@@ -89,7 +90,7 @@ async function main() {
     },
     rural: {
       code: "01.11-3",
-      description: "Atividades agrossilvipastoris e regularizacao rural",
+      description: "Atividades agrossilvipastoris e regularização rural",
       size: "Grande",
       pollutionLevel: "Medio",
       requiredLicenses: [LicenseType.LUA, LicenseType.LUAR, LicenseType.RELUA, LicenseType.AQC],
@@ -97,7 +98,7 @@ async function main() {
     },
     fuel: {
       code: "47.30-1",
-      description: "Comercio varejista de combustiveis e servicos automotivos",
+      description: "Comércio varejista de combustíveis e serviços automotivos",
       size: "Medio",
       pollutionLevel: "Alto",
       requiredLicenses: [LicenseType.LP, LicenseType.LI, LicenseType.LO, LicenseType.LOC],
@@ -105,7 +106,7 @@ async function main() {
     },
     food: {
       code: "10.91-1",
-      description: "Beneficiamento e processamento de produtos alimenticios",
+      description: "Beneficiamento e processamento de produtos alimentícios",
       size: "Medio",
       pollutionLevel: "Medio",
       requiredLicenses: [LicenseType.LO, LicenseType.RENOVACAO],
@@ -113,7 +114,7 @@ async function main() {
     },
     recycling: {
       code: "38.11-4",
-      description: "Coleta, triagem e armazenamento de residuos nao perigosos",
+      description: "Coleta, triagem e armazenamento de resíduos não perigosos",
       size: "Pequeno",
       pollutionLevel: "Medio",
       requiredLicenses: [LicenseType.AUTORIZACAO, LicenseType.DISPENSA, LicenseType.LO],
@@ -121,7 +122,7 @@ async function main() {
     },
     ceramic: {
       code: "23.42-7",
-      description: "Fabricacao de produtos ceramicos para construcao",
+      description: "Fabricação de produtos cerâmicos para construção",
       size: "Medio",
       pollutionLevel: "Alto",
       requiredLicenses: [LicenseType.LP, LicenseType.LI, LicenseType.LO],
@@ -229,18 +230,18 @@ async function main() {
   for (const manager of technicalManagers) {
     const entrepreneurId = entrepreneurs[manager.entrepreneurKey].id;
     const existing = await prisma.technicalManager.findFirst({ where: { entrepreneurId, professionalId: manager.professionalId } });
-    const data = { entrepreneurId, name: manager.name, cpf: manager.cpf, professionalId: manager.professionalId, phone: manager.phone, email: manager.email, artDocument: manager.artDocument };
+    const data = { entrepreneurId, name: manager.name, cpf: manager.cpf, council: manager.professionalId.split(" ")[0]?.split("-")[0], professionalId: manager.professionalId, phone: manager.phone, email: manager.email, artDocument: manager.artDocument };
     if (existing) await prisma.technicalManager.update({ where: { id: existing.id }, data });
     else await prisma.technicalManager.create({ data });
   }
 
   const enterpriseSeeds = {
-    construction: { entrepreneurKey: "construction", activityKey: "construction", name: "Loteamento Jardim das Aguas", address: "MA-034, km 4, zona urbana", latitude: -3.9412, longitude: -42.9231, areaHectares: 18.5, size: "Medio", pollutionLevel: "Medio", propertyClass: "Urbano" },
-    rural: { entrepreneurKey: "rural", activityKey: "rural", name: "Fazenda Boa Esperanca", address: "Povoado Santa Luzia, zona rural", latitude: -3.8754, longitude: -42.8862, areaHectares: 286.4, fiscalModules: 3.2, size: "Grande", pollutionLevel: "Medio", propertyClass: "Rural" },
-    fuel: { entrepreneurKey: "fuel", activityKey: "fuel", name: "Posto Buriti Verde - Centro", address: "Avenida Governador Nunes Freire, 480", latitude: -3.9428, longitude: -42.9172, areaHectares: 0.62, size: "Medio", pollutionLevel: "Alto", propertyClass: "Urbano" },
-    food: { entrepreneurKey: "food", activityKey: "food", name: "Unidade de Beneficiamento Serra Dourada", address: "Distrito Industrial, lote 12", latitude: -3.9561, longitude: -42.9048, areaHectares: 2.8, size: "Medio", pollutionLevel: "Medio", propertyClass: "Urbano" },
-    recycling: { entrepreneurKey: "recycling", activityKey: "recycling", name: "Central de Triagem Recicla Buriti", address: "Estrada Vicinal do Angelim, km 2", latitude: -3.9284, longitude: -42.9472, areaHectares: 1.4, size: "Pequeno", pollutionLevel: "Medio", propertyClass: "Urbano" },
-    ceramic: { entrepreneurKey: "ceramic", activityKey: "ceramic", name: "Ceramica Novo Horizonte", address: "Estrada do Povoado Areia Branca, km 3", latitude: -3.9015, longitude: -42.9621, areaHectares: 7.9, size: "Medio", pollutionLevel: "Alto", propertyClass: "Rural" }
+    construction: { entrepreneurKey: "construction", activityKey: "construction", name: "Loteamento Jardim das Aguas", address: "MA-034, km 4, zona urbana", district: "Bairro Bacuri", zone: "URBANA", latitude: -3.9412, longitude: -42.9231, areaHectares: 18.5, size: "Medio", pollutionLevel: "Medio", propertyClass: "Urbano" },
+    rural: { entrepreneurKey: "rural", activityKey: "rural", name: "Fazenda Boa Esperanca", address: "Povoado Santa Luzia, zona rural", district: "Povoado Santa Luzia", zone: "RURAL", latitude: -3.8754, longitude: -42.8862, areaHectares: 286.4, fiscalModules: 3.2, size: "Grande", pollutionLevel: "Medio", propertyClass: "Rural" },
+    fuel: { entrepreneurKey: "fuel", activityKey: "fuel", name: "Posto Buriti Verde - Centro", address: "Avenida Governador Nunes Freire, 480", district: "Centro", zone: "URBANA", latitude: -3.9428, longitude: -42.9172, areaHectares: 0.62, size: "Medio", pollutionLevel: "Alto", propertyClass: "Urbano" },
+    food: { entrepreneurKey: "food", activityKey: "food", name: "Unidade de Beneficiamento Serra Dourada", address: "Distrito Industrial, lote 12", district: "Distrito Industrial", zone: "URBANA", latitude: -3.9561, longitude: -42.9048, areaHectares: 2.8, size: "Medio", pollutionLevel: "Medio", propertyClass: "Urbano" },
+    recycling: { entrepreneurKey: "recycling", activityKey: "recycling", name: "Central de Triagem Recicla Buriti", address: "Estrada Vicinal do Angelim, km 2", district: "Angelim", zone: "URBANA", latitude: -3.9284, longitude: -42.9472, areaHectares: 1.4, size: "Pequeno", pollutionLevel: "Medio", propertyClass: "Urbano" },
+    ceramic: { entrepreneurKey: "ceramic", activityKey: "ceramic", name: "Ceramica Novo Horizonte", address: "Estrada do Povoado Areia Branca, km 3", district: "Povoado Areia Branca", zone: "RURAL", latitude: -3.9015, longitude: -42.9621, areaHectares: 7.9, size: "Medio", pollutionLevel: "Alto", propertyClass: "Rural" }
   } as const;
 
   const enterprises = {} as Record<keyof typeof enterpriseSeeds, Awaited<ReturnType<typeof prisma.enterprise.create>>>;
@@ -254,6 +255,8 @@ async function main() {
       name: seed.name,
       address: seed.address,
       municipality: "Buriti - MA",
+      district: seed.district,
+      zone: seed.zone,
       latitude: seed.latitude,
       longitude: seed.longitude,
       areaHectares: seed.areaHectares,
@@ -265,6 +268,14 @@ async function main() {
     enterprises[key] = existing
       ? await prisma.enterprise.update({ where: { id: existing.id }, data })
       : await prisma.enterprise.create({ data });
+  }
+
+  for (const manager of technicalManagers) {
+    const enterprise = enterprises[manager.entrepreneurKey];
+    await prisma.technicalManager.updateMany({
+      where: { entrepreneurId: enterprise.entrepreneurId, professionalId: manager.professionalId },
+      data: { enterpriseId: enterprise.id }
+    });
   }
 
   const processes: DemoProcess[] = [
@@ -589,17 +600,55 @@ async function main() {
   }
 
   const news = [
-    { title: "Atendimento digital para licenciamento ambiental", body: "Empreendedores podem consultar processos e acompanhar pendencias pela plataforma municipal.", publishedAt: date("2026-07-28") },
-    { title: "Agenda de orientacao aos empreendedores", body: "A Secretaria realizara atendimento tecnico orientativo para novos pedidos de licenca ambiental.", publishedAt: date("2026-07-21") },
-    { title: "Consulta publica e validacao de licencas", body: "Documentos emitidos pelo municipio podem ser validados com o codigo de autenticidade informado na licenca.", publishedAt: date("2026-07-14") }
+    { title: "Atendimento digital para licenciamento ambiental", body: "Empreendedores podem consultar processos e acompanhar pendências pela plataforma municipal.", publishedAt: date("2026-07-28") },
+    { title: "Agenda de orientação aos empreendedores", body: "A Secretaria realizará atendimento técnico orientativo para novos pedidos de licença ambiental.", publishedAt: date("2026-07-21") },
+    { title: "Consulta pública e validação de licenças", body: "Documentos emitidos pelo município podem ser validados com o código de autenticidade informado na licença.", publishedAt: date("2026-07-14") }
   ];
-  await prisma.news.deleteMany({ where: { title: { in: news.map((item) => item.title) } } });
+  await prisma.news.deleteMany({
+    where: {
+      title: {
+        in: [
+          ...news.map((item) => item.title),
+          "Agenda de orientacao aos empreendedores",
+          "Consulta publica e validacao de licencas"
+        ]
+      }
+    }
+  });
   await prisma.news.createMany({ data: news });
+
+  const institutionalContent = [
+    {
+      type: InstitutionalContentType.MANUAL,
+      title: "Manual do usuário da plataforma",
+      summary: "Orientações para consulta pública, solicitação, análise, fiscalização e administração.",
+      body: "Empreendedores cadastram empreendimentos, responsáveis técnicos e solicitações; analistas tratam documentos, pareceres e condicionantes; fiscais registram ações de campo; administradores gerenciam equipe, regras, taxas, conteúdo e relatórios. Acompanhe cada processo pelo histórico e pela central de notificações.",
+      reference: "Manual operacional do Licença Buriti",
+      isPublished: true,
+      publishedAt: date("2026-07-30")
+    },
+    {
+      type: InstitutionalContentType.LEGISLACAO,
+      title: "Lei Municipal nº 756/2024",
+      summary: "Base municipal dos atos e procedimentos de licenciamento ambiental.",
+      body: "Dispõe sobre o licenciamento ambiental municipal, tipos de licença, autorizações, fiscalização, taxas e procedimentos aplicáveis no Município de Buriti.",
+      reference: "Lei Municipal 756/2024",
+      isPublished: true,
+      publishedAt: date("2026-07-01")
+    }
+  ];
+  for (const content of institutionalContent) {
+    const existing = await prisma.institutionalContent.findFirst({ where: { type: content.type, title: content.title } });
+    if (existing) await prisma.institutionalContent.update({ where: { id: existing.id }, data: content });
+    else await prisma.institutionalContent.create({ data: content });
+  }
 
   const templates = [
     { name: "Licenca Ambiental Municipal", type: "Licenca", content: "Concede-se a licenca ambiental ao empreendimento {{empreendimento}}, processo {{processo}}, observadas as condicionantes anexas." },
     { name: "Parecer Tecnico", type: "Parecer", content: "Apos analise documental e vistoria, conclui-se pelo {{resultado}} do pedido, conforme fundamentos tecnicos registrados." },
     { name: "Notificacao de Complementacao", type: "Notificacao", content: "Notifica-se o empreendedor para apresentar a documentacao complementar indicada no prazo regulamentar." },
+    { name: "Declaracao Ambiental", type: "Declaracao", content: "Declara-se, para os devidos fins, que o empreendimento {{empreendimento}} consta no processo {{processo}}." },
+    { name: "Oficio Administrativo", type: "Oficio", content: "Oficio referente ao processo {{processo}} e ao empreendimento {{empreendimento}}." },
     { name: "Relatorio de Vistoria", type: "Relatorio", content: "Relatorio da vistoria realizada em {{data}}, no empreendimento {{empreendimento}}, processo {{processo}}." },
     { name: "Termo de Indeferimento", type: "Decisao", content: "Comunica-se o indeferimento do processo {{processo}}, pelos fundamentos constantes no parecer tecnico." }
   ];

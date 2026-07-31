@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:security": "tsx tests/security-policy.test.ts",
@@ -25,6 +25,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "nodemailer": "^9.0.3",
     "pdfkit": "^0.17.2",
     "pino": "^10.3.1",
     "zod": "^4.1.5"
@@ -35,6 +36,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.3.1",
+    "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.2",
     "prisma": "^6.15.0",
     "tsx": "^4.20.5",

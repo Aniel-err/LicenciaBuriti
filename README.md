@@ -32,7 +32,7 @@ Versao beta em desenvolvimento. O sistema ja possui fluxo principal de licenciam
 
 - Monorepo npm workspaces.
 - API REST em Node.js, Express e TypeScript.
-- Banco PostgreSQL com Prisma ORM.
+- Banco PostgreSQL com Prisma ORM e PostGIS.
 - Front-end React, TypeScript, Vite, React Router e Recharts.
 - Testes de politica de seguranca no backend e frontend.
 
@@ -82,6 +82,7 @@ npm run dev
 Front-end: http://localhost:5173  
 API: http://localhost:3333  
 Healthcheck: http://localhost:3333/health
+Prontidão do banco: http://localhost:3333/ready
 
 ## Validacao
 
@@ -104,4 +105,4 @@ O seed cria usuarios iniciais para desenvolvimento. Defina `SEED_ADMIN_PASSWORD`
 
 ## Producao
 
-Antes de publicar em producao, revisar `docs/PRODUCAO_CHECKLIST.md`, configurar variaveis reais, HTTPS, origem do front-end, segredo JWT forte, backup do banco, armazenamento definitivo de documentos e politica operacional de retencao/auditoria.
+Antes de publicar em produção, revise `docs/PRODUCAO_CHECKLIST.md` e `docs/IMPLANTACAO_EASYPANEL.md`. O repositório inclui composição com PostGIS, HTTPS automático, volumes persistentes, verificações de saúde e scripts de backup/restauração.

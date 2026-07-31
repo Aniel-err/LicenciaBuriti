@@ -1,4 +1,4 @@
-import type { AppState, Atividade, Configuracao, Documento, Empreendedor, Empreendimento, Fiscalizacao, ModeloDocumento, Perfil, Processo, Status, Taxa, TimelineItem, Usuario } from "./types";
+import type { AppState, Atividade, Configuracao, ConteudoInstitucional, Documento, Empreendedor, Empreendimento, Fiscalizacao, ModeloDocumento, Notificacao, Perfil, Processo, ResponsavelTecnico, Status, Taxa, TimelineItem, Usuario } from "./types";
 
 export type ApiRole = "ADMIN" | "ANALISTA" | "FISCAL" | "EMPREENDEDOR";
 
@@ -86,6 +86,49 @@ export async function loginApi(email: string, password: string): Promise<LoginRe
   }
 
   return response.json() as Promise<LoginResponse>;
+}
+
+export async function registerApi(data: Record<string, string>): Promise<LoginResponse> {
+  const response = await friendlyFetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      personType: data.tipo === "PF" ? "PF" : "PJ",
+      name: data.nome,
+      email: data.email,
+      password: data.senha,
+      phone: data.telefone,
+      address: data.endereco,
+      cpf: data.tipo === "PF" ? data.cpf : undefined,
+      rg: data.tipo === "PF" ? data.rg : undefined,
+      companyName: data.tipo === "PJ" ? data.nome : undefined,
+      tradeName: data.tipo === "PJ" ? data.nomeFantasia : undefined,
+      cnpj: data.tipo === "PJ" ? data.cnpj : undefined,
+      stateRegistration: data.tipo === "PJ" ? data.inscricaoEstadual : undefined,
+      legalRepresentative: data.tipo === "PJ" ? data.responsavelLegal : undefined
+    })
+  });
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel concluir o cadastro."));
+  return response.json() as Promise<LoginResponse>;
+}
+
+export async function forgotPasswordApi(email: string) {
+  const response = await friendlyFetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email })
+  });
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel solicitar a redefinicao."));
+  return response.json() as Promise<{ message: string; developmentResetToken?: string }>;
+}
+
+export async function resetPasswordApi(token: string, password: string) {
+  const response = await friendlyFetch(`${API_BASE_URL}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password })
+  });
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel redefinir a senha."));
 }
 
 async function apiFetch<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
@@ -181,11 +224,28 @@ type ApiEntrepreneur = {
   personType: "PF" | "PJ";
   name: string;
   cpf?: string | null;
+  rg?: string | null;
+  companyName?: string | null;
+  tradeName?: string | null;
   cnpj?: string | null;
+  stateRegistration?: string | null;
   legalRepresentative?: string | null;
   phone: string;
   email: string;
   address: string;
+};
+
+type ApiTechnicalManager = {
+  id: string;
+  entrepreneurId: string;
+  enterpriseId?: string | null;
+  name: string;
+  cpf: string;
+  council?: string | null;
+  professionalId: string;
+  artDocument?: string | null;
+  phone: string;
+  email: string;
 };
 
 type ApiActivity = {
@@ -196,6 +256,8 @@ type ApiActivity = {
   pollutionLevel: string;
   requiredLicenses: string[];
   requiredDocuments: string[];
+  legalBasis?: string | null;
+  isActive?: boolean;
 };
 
 type ApiEnterprise = {
@@ -208,9 +270,12 @@ type ApiEnterprise = {
   longitude?: string | number | null;
   activityId: string;
   areaHectares?: string | number | null;
+  fiscalModules?: string | number | null;
   size: string;
   pollutionLevel: string;
   propertyClass: string;
+  district?: string | null;
+  zone?: string | null;
 };
 
 type ApiDocument = {
@@ -237,9 +302,29 @@ type ApiMessage = {
 };
 
 type ApiIssuedDocument = {
+  id: string;
+  type: string;
   number: string;
   issuedAt: string;
   validUntil?: string | null;
+  filePath?: string | null;
+};
+
+type ApiOpinion = {
+  id: string;
+  conclusion: string;
+  content: string;
+  createdAt: string;
+  author?: { name?: string | null } | null;
+};
+
+type ApiCondition = {
+  id: string;
+  description: string;
+  dueDate: string;
+  status: string;
+  notes?: string | null;
+  completedAt?: string | null;
 };
 
 type ApiProcess = {
@@ -248,6 +333,7 @@ type ApiProcess = {
   protocol: string;
   entrepreneurId: string;
   enterpriseId: string;
+  enterprise?: { name: string } | null;
   analyst?: { name: string } | null;
   licenseType: string;
   status: string;
@@ -257,7 +343,9 @@ type ApiProcess = {
   messages?: ApiMessage[];
   history?: ApiHistory[];
   issuedDocs?: ApiIssuedDocument[];
-  conditions?: Array<{ description: string }>;
+  opinions?: ApiOpinion[];
+  conditions?: ApiCondition[];
+  renewalOfId?: string | null;
 };
 
 type ApiInspection = {
@@ -273,6 +361,7 @@ type ApiInspection = {
   validatedAt?: string | null;
   validatedBy?: string | null;
   validationNotes?: string | null;
+  attachments?: Array<{ id: string; fileName: string; mimeType: string }>;
 };
 
 type ApiFee = {
@@ -309,6 +398,49 @@ type ApiConfig = {
   publicSearchEnabled: boolean;
 };
 
+type ApiInstitutionalContent = {
+  id: string;
+  type: "MANUAL" | "LEGISLACAO";
+  title: string;
+  summary?: string | null;
+  body: string;
+  reference?: string | null;
+  publishedAt: string;
+  isPublished: boolean;
+};
+
+type ApiNewsAdmin = {
+  id: string;
+  title: string;
+  body: string;
+  publishedAt: string;
+  isPublished: boolean;
+};
+
+function mapInstitutionalContent(item: ApiInstitutionalContent): ConteudoInstitucional {
+  return {
+    id: item.id,
+    tipo: item.type === "MANUAL" ? "Manual" : "Legislação",
+    titulo: item.title,
+    resumo: item.summary ?? undefined,
+    conteudo: item.body,
+    referencia: item.reference ?? undefined,
+    publicadoEm: formatDate(item.publishedAt),
+    publicado: item.isPublished
+  };
+}
+
+function mapNewsContent(item: ApiNewsAdmin): ConteudoInstitucional {
+  return {
+    id: item.id,
+    tipo: "Notícia",
+    titulo: item.title,
+    conteudo: item.body,
+    publicadoEm: formatDate(item.publishedAt),
+    publicado: item.isPublished
+  };
+}
+
 export function mapUser(user: ApiUser): Usuario {
   return {
     id: user.id,
@@ -329,10 +461,31 @@ function mapEntrepreneur(item: ApiEntrepreneur): Empreendedor {
     tipo: item.personType,
     nome: item.name,
     documento: item.cnpj ?? item.cpf ?? "-",
+    cpf: item.cpf ?? undefined,
+    rg: item.rg ?? undefined,
+    razaoSocial: item.companyName ?? undefined,
+    nomeFantasia: item.tradeName ?? undefined,
+    cnpj: item.cnpj ?? undefined,
+    inscricaoEstadual: item.stateRegistration ?? undefined,
     responsavelLegal: item.legalRepresentative ?? item.name,
     telefone: item.phone,
     email: item.email,
     endereco: item.address
+  };
+}
+
+function mapTechnicalManager(item: ApiTechnicalManager): ResponsavelTecnico {
+  return {
+    id: item.id,
+    empreendedorId: item.entrepreneurId,
+    empreendimentoId: item.enterpriseId ?? undefined,
+    nome: item.name,
+    cpf: item.cpf,
+    conselho: item.council ?? "",
+    registroProfissional: item.professionalId,
+    telefone: item.phone,
+    email: item.email,
+    artDisponivel: Boolean(item.artDocument)
   };
 }
 
@@ -344,7 +497,9 @@ function mapActivity(item: ApiActivity): Atividade {
     porte: item.size,
     potencial: item.pollutionLevel,
     licencas: item.requiredLicenses,
-    documentos: item.requiredDocuments
+    documentos: item.requiredDocuments,
+    baseLegal: item.legalBasis ?? undefined,
+    ativo: item.isActive ?? true
   };
 }
 
@@ -359,9 +514,12 @@ function mapEnterprise(item: ApiEnterprise): Empreendimento {
     longitude: String(item.longitude ?? ""),
     atividadeId: item.activityId,
     area: item.areaHectares ? `${item.areaHectares} ha` : "",
+    modulosFiscais: item.fiscalModules ? String(item.fiscalModules) : "",
     porte: item.size,
     potencial: item.pollutionLevel,
-    classificacao: item.propertyClass === "Rural" ? "Rural" : "Urbano"
+    classificacao: item.propertyClass.toLowerCase() === "rural" ? "Rural" : "Urbano",
+    bairro: item.district ?? undefined,
+    zona: item.zone === "RURAL" ? "RURAL" : "URBANA"
   };
 }
 
@@ -383,11 +541,26 @@ function mapProcess(item: ApiProcess): Processo {
     tipoLicenca: item.licenseType,
     empreendedorId: item.entrepreneurId,
     empreendimentoId: item.enterpriseId,
-    analista: item.analyst?.name ?? "Aguardando distribuicao",
+    analista: item.analyst?.name ?? "Aguardando distribuição",
     prazo: formatDate(item.dueDate),
     status: statusFromApi(item.status, Boolean(license)),
     abertura: formatDate(item.openedAt),
     condicionantes: (item.conditions ?? []).map((condition) => condition.description),
+    pareceres: (item.opinions ?? []).map((opinion) => ({
+      id: opinion.id,
+      conclusao: opinion.conclusion,
+      conteudo: opinion.content,
+      autor: opinion.author?.name ?? undefined,
+      data: formatDateTime(opinion.createdAt)
+    })),
+    condicionantesDetalhadas: (item.conditions ?? []).map((condition) => ({
+      id: condition.id,
+      descricao: condition.description,
+      prazo: formatDate(condition.dueDate),
+      status: condition.status === "CUMPRIDA" ? "Cumprida" : condition.status === "EM_CUMPRIMENTO" ? "Em cumprimento" : condition.status === "VENCIDA" ? "Vencida" : "Pendente",
+      observacao: condition.notes ?? undefined,
+      concluidaEm: condition.completedAt ? formatDateTime(condition.completedAt) : undefined
+    })),
     documentos: item.documents.map((document) => ({
       id: document.id,
       nome: document.name,
@@ -403,7 +576,23 @@ function mapProcess(item: ApiProcess): Processo {
       data: formatDateTime(message.createdAt)
     })),
     timeline,
-    licencaEmitida: license ? { numero: license.number, data: formatDate(license.issuedAt), validade: formatDate(license.validUntil) } : undefined
+    licencaEmitida: license ? {
+      id: license.id,
+      numero: license.number,
+      tipo: license.type,
+      data: formatDate(license.issuedAt),
+      validade: formatDate(license.validUntil),
+      disponivelParaDownload: Boolean(license.filePath)
+    } : undefined,
+    documentosEmitidos: (item.issuedDocs ?? []).map((document) => ({
+      id: document.id,
+      numero: document.number,
+      tipo: document.type,
+      emissao: formatDate(document.issuedAt),
+      validade: document.validUntil ? formatDate(document.validUntil) : undefined,
+      disponivelParaDownload: Boolean(document.filePath)
+    })),
+    renovacaoDeId: item.renewalOfId ?? undefined
   };
 }
 
@@ -420,7 +609,8 @@ function mapInspection(item: ApiInspection): Fiscalizacao {
     validadaEm: formatDateTime(item.validatedAt),
     validadaPor: item.validatedBy ?? undefined,
     conclusao: item.validationNotes ?? undefined,
-    fotos: []
+    fotos: (item.attachments ?? []).filter((attachment) => attachment.mimeType.startsWith("image/")).map((attachment) => attachment.fileName),
+    anexos: (item.attachments ?? []).map((attachment) => ({ id: attachment.id, nome: attachment.fileName, tipo: attachment.mimeType }))
   };
 }
 
@@ -455,30 +645,67 @@ function mapTemplate(item: ApiTemplate): ModeloDocumento {
   };
 }
 
+type ApiNotification = {
+  id: string;
+  processId?: string | null;
+  type: "PRAZO_PROCESSO" | "DOCUMENTO" | "CONDICIONANTE" | "LICENCA" | "SISTEMA";
+  title: string;
+  message: string;
+  dueAt?: string | null;
+  isRead: boolean;
+  createdAt: string;
+};
+
+function mapNotification(item: ApiNotification): Notificacao {
+  const types: Record<ApiNotification["type"], Notificacao["tipo"]> = {
+    PRAZO_PROCESSO: "Prazo",
+    DOCUMENTO: "Documento",
+    CONDICIONANTE: "Condicionante",
+    LICENCA: "Licença",
+    SISTEMA: "Sistema"
+  };
+  return {
+    id: item.id,
+    data: formatDateTime(item.createdAt),
+    titulo: item.title,
+    mensagem: item.message,
+    lida: item.isRead,
+    tipo: types[item.type],
+    processoId: item.processId ?? undefined,
+    vencimento: item.dueAt ? formatDate(item.dueAt) : undefined
+  };
+}
+
 export async function loadAppState(token: string, perfil: Perfil, current: AppState): Promise<AppState> {
-  const [processes, entrepreneurs, enterprises, activities, fees, inspections, config, templates, users, audit] = await Promise.all([
+  const [processes, entrepreneurs, technicalManagers, enterprises, activities, fees, inspections, config, templates, contents, news, users, audit, notifications] = await Promise.all([
     apiFetch<ApiProcess[]>("/processes", token),
     apiFetch<ApiEntrepreneur[]>("/entrepreneurs", token),
+    apiFetch<ApiTechnicalManager[]>("/technical-managers", token),
     apiFetch<ApiEnterprise[]>("/enterprises", token),
     apiFetch<ApiActivity[]>("/catalog/activities", token),
     apiFetch<ApiFee[]>("/catalog/fees", token),
     apiFetch<ApiInspection[]>("/inspections", token),
     apiFetch<ApiConfig>("/settings", token),
     ["Administrador", "Analista"].includes(perfil) ? apiFetch<ApiTemplate[]>("/document-templates", token) : Promise.resolve([]),
+    ["Administrador", "Analista"].includes(perfil) ? apiFetch<ApiInstitutionalContent[]>("/institutional/content", token) : Promise.resolve([]),
+    ["Administrador", "Analista"].includes(perfil) ? apiFetch<ApiNewsAdmin[]>("/institutional/news", token) : Promise.resolve([]),
     perfil === "Administrador" ? apiFetch<Array<ApiUser & { phone?: string; isActive: boolean; createdAt: string }>>("/admin/users", token) : Promise.resolve([]),
-    perfil === "Administrador" ? apiFetch<ApiAudit[]>("/admin/audit", token) : Promise.resolve([])
+    perfil === "Administrador" ? apiFetch<ApiAudit[]>("/admin/audit", token) : Promise.resolve([]),
+    apiFetch<ApiNotification[]>("/notifications", token)
   ]);
 
   return {
     ...current,
     processos: processes.map(mapProcess),
     empreendedores: entrepreneurs.map(mapEntrepreneur),
+    responsaveisTecnicos: technicalManagers.map(mapTechnicalManager),
     empreendimentos: enterprises.map(mapEnterprise),
     atividades: activities.map(mapActivity),
     taxas: fees.map(mapFee),
     fiscalizacoes: inspections.map(mapInspection),
     configuracao: mapConfig(config),
     modelos: templates.map(mapTemplate),
+    conteudos: [...contents.map(mapInstitutionalContent), ...news.map(mapNewsContent)],
     usuarios: users.length > 0 ? users.map((user) => ({ ...mapUser(user), telefone: user.phone ?? "", ativo: user.isActive, ultimoAcesso: formatDateTime(user.createdAt) })) : current.usuarios,
     auditoria: audit.map((item) => ({
       id: item.id,
@@ -488,8 +715,41 @@ export async function loadAppState(token: string, perfil: Perfil, current: AppSt
       entidade: item.entity,
       detalhe: item.entityId ?? "-"
     })),
-    notificacoes: current.notificacoes
+    notificacoes: notifications.map(mapNotification)
   };
+}
+
+export async function markNotificationReadApi(token: string, notificationId: string) {
+  return apiFetch<ApiNotification>(`/notifications/${notificationId}/read`, token, { method: "PATCH" });
+}
+
+export async function markAllNotificationsReadApi(token: string) {
+  return apiFetch<{ updated: number }>("/notifications/read-all", token, { method: "PATCH" });
+}
+
+export type DashboardData = {
+  metrics: {
+    total: number;
+    emAnalise: number;
+    aguardando: number;
+    deferidos: number;
+    indeferidos: number;
+    emitidas: number;
+    vencendo: number;
+    vencidas: number;
+  };
+  groups: {
+    status: Array<{ name: string; count: number }>;
+    analyst: Array<{ name: string; count: number }>;
+    activity: Array<{ name: string; count: number }>;
+    month: Array<{ name: string; count: number }>;
+  };
+  deadlines: Array<{ id: string; description: string; dueDate: string; process: { id: string; number: string } }>;
+  processos: ApiProcess[];
+};
+
+export async function getDashboardApi(token: string) {
+  return apiFetch<DashboardData>("/dashboard", token);
 }
 
 export async function createProcessApi(token: string, enterprise: Empreendimento, licenseType: string) {
@@ -518,10 +778,10 @@ export async function requestProcessDocumentApi(token: string, processId: string
   return apiFetch<ApiDocument>(`/processes/${processId}/documents`, token, { method: "POST", body: JSON.stringify({ name }) });
 }
 
-export async function createOpinionApi(token: string, processId: string, content: string) {
+export async function createOpinionApi(token: string, processId: string, conclusion: string, content: string) {
   return apiFetch(`/processes/${processId}/opinions`, token, {
     method: "POST",
-    body: JSON.stringify({ conclusion: content.slice(0, 180), content })
+    body: JSON.stringify({ conclusion, content })
   });
 }
 
@@ -536,6 +796,14 @@ export async function validateDocumentApi(token: string, documentId: string, sta
     method: "PATCH",
     body: JSON.stringify({ status, notes })
   });
+}
+
+export async function downloadDocumentApi(token: string, documentId: string) {
+  const response = await friendlyFetch(`${API_BASE_URL}/documents/${documentId}/download`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar o documento."));
+  return response.blob();
 }
 
 export async function issueLicenseApi(token: string, processId: string) {
@@ -556,9 +824,34 @@ export async function createEntrepreneurApi(token: string, data: Record<string, 
   return apiFetch<ApiEntrepreneur>("/entrepreneurs", token, {
     method: "POST",
     body: JSON.stringify({
-      personType: "PJ",
+      personType: data.tipo === "PF" ? "PF" : "PJ",
       name: data.nome,
-      cnpj: data.documento,
+      cpf: data.tipo === "PF" ? data.cpf : undefined,
+      rg: data.tipo === "PF" ? data.rg : undefined,
+      companyName: data.tipo === "PJ" ? data.nome : undefined,
+      tradeName: data.tipo === "PJ" ? data.nomeFantasia : undefined,
+      cnpj: data.tipo === "PJ" ? data.cnpj : undefined,
+      stateRegistration: data.tipo === "PJ" ? data.inscricaoEstadual : undefined,
+      legalRepresentative: data.responsavelLegal,
+      phone: data.telefone,
+      email: data.email,
+      address: data.endereco
+    })
+  });
+}
+
+export async function updateEntrepreneurApi(token: string, entrepreneurId: string, data: Record<string, string>) {
+  return apiFetch<ApiEntrepreneur>(`/entrepreneurs/${entrepreneurId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({
+      personType: data.tipo === "PF" ? "PF" : "PJ",
+      name: data.nome,
+      cpf: data.tipo === "PF" ? data.cpf : undefined,
+      rg: data.tipo === "PF" ? data.rg : undefined,
+      companyName: data.tipo === "PJ" ? data.nome : undefined,
+      tradeName: data.tipo === "PJ" ? data.nomeFantasia : undefined,
+      cnpj: data.tipo === "PJ" ? data.cnpj : undefined,
+      stateRegistration: data.tipo === "PJ" ? data.inscricaoEstadual : undefined,
       legalRepresentative: data.responsavelLegal,
       phone: data.telefone,
       email: data.email,
@@ -575,12 +868,38 @@ export async function createEnterpriseApi(token: string, data: Record<string, st
       activityId,
       name: data.nome,
       address: data.endereco,
+      municipality: data.municipio || "Buriti - MA",
+      district: data.bairro || undefined,
+      zone: data.zona === "RURAL" ? "RURAL" : "URBANA",
       latitude: data.latitude || undefined,
       longitude: data.longitude || undefined,
       areaHectares: data.area ? Number(data.area.replace(",", ".")) : undefined,
-      size: activity?.porte ?? "Medio",
-      pollutionLevel: activity?.potencial ?? "Medio",
-      propertyClass: "Urbano"
+      fiscalModules: data.modulosFiscais ? Number(data.modulosFiscais.replace(",", ".")) : undefined,
+      size: data.porte || activity?.porte || "Medio",
+      pollutionLevel: data.potencial || activity?.potencial || "Medio",
+      propertyClass: data.classificacao || (data.zona === "RURAL" ? "Rural" : "Urbano")
+    })
+  });
+}
+
+export async function updateEnterpriseApi(token: string, enterpriseId: string, data: Record<string, string>, entrepreneurId: string, activityId: string, activity?: Atividade) {
+  return apiFetch<ApiEnterprise>(`/enterprises/${enterpriseId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({
+      entrepreneurId,
+      activityId,
+      name: data.nome,
+      address: data.endereco,
+      municipality: data.municipio || "Buriti - MA",
+      district: data.bairro || undefined,
+      zone: data.zona === "RURAL" ? "RURAL" : "URBANA",
+      latitude: data.latitude || undefined,
+      longitude: data.longitude || undefined,
+      areaHectares: data.area ? Number(data.area.replace(",", ".")) : undefined,
+      fiscalModules: data.modulosFiscais ? Number(data.modulosFiscais.replace(",", ".")) : undefined,
+      size: data.porte || activity?.porte || "Medio",
+      pollutionLevel: data.potencial || activity?.potencial || "Medio",
+      propertyClass: data.classificacao || (data.zona === "RURAL" ? "Rural" : "Urbano")
     })
   });
 }
@@ -594,7 +913,25 @@ export async function createActivityApi(token: string, data: Record<string, stri
       size: data.porte || "Medio",
       pollutionLevel: data.potencial || "Medio",
       requiredLicenses: (data.licencas || "LI").split(",").map((item) => item.trim()).filter(Boolean),
-      requiredDocuments: (data.documentos || "Requerimento").split("\n").map((item) => item.trim()).filter(Boolean)
+      requiredDocuments: (data.documentos || "Requerimento").split(/[,\n]/).map((item) => item.trim()).filter(Boolean),
+      legalBasis: data.baseLegal || undefined,
+      isActive: true
+    })
+  });
+}
+
+export async function updateActivityApi(token: string, activityId: string, data: Record<string, string>) {
+  return apiFetch<ApiActivity>(`/catalog/activities/${activityId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({
+      code: data.codigo,
+      description: data.descricao,
+      size: data.porte,
+      pollutionLevel: data.potencial,
+      requiredLicenses: (data.licencas ?? "").split(",").map((item) => item.trim()).filter(Boolean),
+      requiredDocuments: (data.documentos ?? "").split(/[,\n]/).map((item) => item.trim()).filter(Boolean),
+      legalBasis: data.baseLegal || undefined,
+      isActive: true
     })
   });
 }
@@ -611,19 +948,36 @@ export async function createFeeApi(token: string, data: Record<string, string>, 
   });
 }
 
-export async function createInspectionApi(token: string, data: Record<string, string>, processId: string, fiscalId?: string) {
+export async function updateFeeApi(token: string, feeId: string, data: Record<string, string>, activityId: string) {
+  return apiFetch<ApiFee>(`/catalog/fees/${feeId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({
+      activityId,
+      licenseType: data.licenca,
+      size: data.porte,
+      amountCents: Math.round((Number((data.valor ?? "0").replace(",", ".")) || 0) * 100)
+    })
+  });
+}
+
+export async function createInspectionApi(token: string, data: Record<string, string>, processId: string, fiscalId?: string, files: File[] = []) {
   if (!fiscalId) throw new Error("Informe um fiscal valido");
-  return apiFetch<ApiInspection>("/inspections", token, {
+  const normalizedType = (data.tipo || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  const inspection = await apiFetch<ApiInspection>("/inspections", token, {
     method: "POST",
     body: JSON.stringify({
       processId,
       fiscalId,
-      type: data.tipo === "Embargo" ? "EMBARGO" : data.tipo === "Notificacao" ? "NOTIFICACAO" : data.tipo === "Auto de infracao" ? "AUTO_INFRACAO" : "VISTORIA",
+      type: normalizedType === "embargo" ? "EMBARGO" : normalizedType === "notificacao" ? "NOTIFICACAO" : normalizedType === "auto de infracao" ? "AUTO_INFRACAO" : "VISTORIA",
       scheduledAt: data.data ? new Date(data.data).toISOString() : undefined,
+      latitude: data.latitude || undefined,
+      longitude: data.longitude || undefined,
       report: data.relatorio,
       photos: []
     })
   });
+  if (files.length) await uploadInspectionAttachmentsApi(token, inspection.id, files);
+  return inspection;
 }
 
 export async function validateInspectionApi(token: string, inspectionId: string, notes: string) {
@@ -658,8 +1012,190 @@ export async function updateUserStatusApi(token: string, userId: string, isActiv
   return apiFetch(`/admin/users/${userId}/status`, token, { method: "PATCH", body: JSON.stringify({ isActive }) });
 }
 
+export async function updateTemplateApi(token: string, template: ModeloDocumento, data: Record<string, string>) {
+  return apiFetch<ApiTemplate>(`/document-templates/${template.id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: data.nome,
+      type: data.tipo,
+      content: data.conteudo,
+      isActive: template.ativo
+    })
+  });
+}
+
+export async function updateUserApi(token: string, userId: string, data: Record<string, string | null>) {
+  return apiFetch<ApiUser>(`/admin/users/${userId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: data.nome,
+      email: data.email,
+      phone: data.telefone || null,
+      role: data.perfil ? perfilToRole(data.perfil as Usuario["perfil"]) : undefined,
+      password: data.senha || undefined,
+      entrepreneurId: data.empreendedorId || null
+    })
+  });
+}
+
+export async function uploadInspectionAttachmentsApi(token: string, inspectionId: string, files: File[]) {
+  const body = new FormData();
+  files.forEach((file) => body.append("files", file));
+  return apiFetch<Array<{ id: string; fileName: string; mimeType: string }>>(`/inspections/${inspectionId}/attachments`, token, { method: "POST", body });
+}
+
+export async function downloadInspectionAttachmentApi(token: string, attachmentId: string) {
+  const response = await friendlyFetch(`${API_BASE_URL}/inspections/attachments/${attachmentId}/download`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar o anexo."));
+  return response.blob();
+}
+
+export async function createTechnicalManagerApi(token: string, data: Record<string, string>, artFile?: File) {
+  const manager = await apiFetch<ApiTechnicalManager>("/technical-managers", token, {
+    method: "POST",
+    body: JSON.stringify({
+      entrepreneurId: data.empreendedorId,
+      enterpriseId: data.empreendimentoId || undefined,
+      name: data.nome,
+      cpf: data.cpf,
+      council: data.conselho,
+      professionalId: data.registroProfissional,
+      phone: data.telefone,
+      email: data.email
+    })
+  });
+  if (artFile) {
+    const body = new FormData();
+    body.append("file", artFile);
+    return apiFetch<ApiTechnicalManager>(`/technical-managers/${manager.id}/art`, token, { method: "POST", body });
+  }
+  return manager;
+}
+
+export async function updateTechnicalManagerApi(token: string, managerId: string, data: Record<string, string>, artFile?: File) {
+  let manager = await apiFetch<ApiTechnicalManager>(`/technical-managers/${managerId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({
+      entrepreneurId: data.empreendedorId,
+      enterpriseId: data.empreendimentoId || undefined,
+      name: data.nome,
+      cpf: data.cpf,
+      council: data.conselho,
+      professionalId: data.registroProfissional,
+      phone: data.telefone,
+      email: data.email
+    })
+  });
+  if (artFile) {
+    const body = new FormData();
+    body.append("file", artFile);
+    manager = await apiFetch<ApiTechnicalManager>(`/technical-managers/${manager.id}/art`, token, { method: "POST", body });
+  }
+  return manager;
+}
+
+export async function downloadTechnicalManagerArtApi(token: string, managerId: string) {
+  const response = await friendlyFetch(`${API_BASE_URL}/technical-managers/${managerId}/art`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar a ART."));
+  return response.blob();
+}
+
+export async function issueOfficialDocumentApi(token: string, processId: string, data: {
+  type: "LICENCA" | "CERTIDAO" | "DECLARACAO" | "AUTORIZACAO" | "OFICIO" | "NOTIFICACAO" | "PARECER";
+  subject?: string;
+  body?: string;
+  validUntil?: string;
+  conditions?: Array<{ description: string; dueDate?: string }>;
+}) {
+  const response = await friendlyFetch(`${API_BASE_URL}/official-documents/processes/${processId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel emitir o documento oficial."));
+  return response.blob();
+}
+
+export async function downloadIssuedDocumentApi(token: string, documentId: string) {
+  const response = await friendlyFetch(`${API_BASE_URL}/official-documents/${documentId}/download`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar o documento emitido."));
+  return response.blob();
+}
+
+export async function createConditionApi(token: string, processId: string, description: string, dueDate: string, notes?: string) {
+  return apiFetch<ApiCondition>(`/processes/${processId}/conditions`, token, {
+    method: "POST",
+    body: JSON.stringify({ description, dueDate, notes })
+  });
+}
+
+export async function updateConditionApi(token: string, processId: string, conditionId: string, status: "PENDENTE" | "EM_CUMPRIMENTO" | "CUMPRIDA" | "VENCIDA", notes?: string) {
+  return apiFetch<ApiCondition>(`/processes/${processId}/conditions/${conditionId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ status, notes })
+  });
+}
+
+export async function renewProcessApi(token: string, processId: string) {
+  return apiFetch<ApiProcess>(`/processes/${processId}/renew`, token, { method: "POST" });
+}
+
 export async function updateTemplateStatusApi(token: string, templateId: string, isActive: boolean) {
   return apiFetch(`/document-templates/${templateId}/status`, token, { method: "PATCH", body: JSON.stringify({ isActive }) });
+}
+
+export async function createInstitutionalContentApi(token: string, data: Record<string, string>) {
+  if (data.tipo === "NOTICIA") {
+    return apiFetch<ApiNewsAdmin>("/institutional/news", token, {
+      method: "POST",
+      body: JSON.stringify({
+        title: data.titulo,
+        body: data.conteudo,
+        isPublished: true
+      })
+    });
+  }
+  return apiFetch<ApiInstitutionalContent>("/institutional/content", token, {
+    method: "POST",
+    body: JSON.stringify({
+      type: data.tipo === "MANUAL" ? "MANUAL" : "LEGISLACAO",
+      title: data.titulo,
+      summary: data.resumo || undefined,
+      body: data.conteudo,
+      reference: data.referencia || undefined,
+      isPublished: true
+    })
+  });
+}
+
+export async function updateInstitutionalContentApi(token: string, content: ConteudoInstitucional, data: Record<string, string>) {
+  if (content.tipo === "Notícia") {
+    return apiFetch<ApiNewsAdmin>(`/institutional/news/${content.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title: data.titulo,
+        body: data.conteudo,
+        isPublished: content.publicado
+      })
+    });
+  }
+  return apiFetch<ApiInstitutionalContent>(`/institutional/content/${content.id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({
+      type: data.tipo === "MANUAL" ? "MANUAL" : "LEGISLACAO",
+      title: data.titulo,
+      summary: data.resumo || undefined,
+      body: data.conteudo,
+      reference: data.referencia || undefined,
+      isPublished: content.publicado
+    })
+  });
 }
 
 export async function saveSettingsApi(token: string, config: Configuracao) {
@@ -678,7 +1214,7 @@ export async function saveSettingsApi(token: string, config: Configuracao) {
 
 export async function publicSearchApi(query: string) {
   if (query.trim().length < 5) return [];
-  return publicFetch<Array<{ number: string; enterprise: string; licenseType: string; status: string; validUntil?: string | null }>>(`/public/processes?q=${encodeURIComponent(query)}`);
+  return publicFetch<Array<{ number: string; enterprise: string; licenseType: string; status: string; validUntil?: string | null; issuedNumber?: string | null; issuedType?: string | null; validationCode?: string | null; downloadAvailable?: boolean }>>(`/public/processes?q=${encodeURIComponent(query)}`);
 }
 
 export type PublicLicense = {
@@ -692,14 +1228,37 @@ export type PublicLicense = {
   enterprise: string;
   entrepreneur: string;
   status: string;
+  fileSha256?: string | null;
+  signatureAlgorithm?: string | null;
+  signatureValid?: boolean;
+  downloadAvailable?: boolean;
 };
 
 export type PublicNews = { id: string; title: string; body: string; publishedAt: string };
+export type PublicInstitutionalContent = {
+  id: string;
+  type: "MANUAL" | "LEGISLACAO";
+  title: string;
+  summary?: string | null;
+  body: string;
+  reference?: string | null;
+  publishedAt: string;
+};
 
 export async function validatePublicLicenseApi(code: string) {
   return publicFetch<PublicLicense>(`/public/licenses/${encodeURIComponent(code.trim())}`);
 }
 
+export async function downloadPublicLicenseApi(code: string) {
+  const response = await friendlyFetch(`${API_BASE_URL}/public/licenses/${encodeURIComponent(code.trim())}/download`);
+  if (!response.ok) throw new Error(await readApiError(response, "Nao foi possivel baixar o documento."));
+  return response.blob();
+}
+
 export async function publicNewsApi() {
   return publicFetch<PublicNews[]>("/public/news");
+}
+
+export async function publicInstitutionalContentApi(type: "MANUAL" | "LEGISLACAO") {
+  return publicFetch<PublicInstitutionalContent[]>(`/public/content?type=${type}`);
 }

@@ -12,7 +12,7 @@ export type AuthSession = {
 export function stateForSession(state: AppState, session: AuthSession): AppState {
   if (session.perfil !== "Empreendedor") return state;
   if (!session.empreendedorId) {
-    return { ...state, usuarios: [], empreendedores: [], empreendimentos: [], processos: [], fiscalizacoes: [], auditoria: [], notificacoes: [] };
+    return { ...state, usuarios: [], empreendedores: [], responsaveisTecnicos: [], empreendimentos: [], processos: [], fiscalizacoes: [], auditoria: [], notificacoes: [] };
   }
 
   const enterpriseIds = new Set(state.empreendimentos.filter((item) => item.empreendedorId === session.empreendedorId).map((item) => item.id));
@@ -21,11 +21,12 @@ export function stateForSession(state: AppState, session: AuthSession): AppState
     ...state,
     usuarios: state.usuarios.filter((item) => item.id === session.userId),
     empreendedores: state.empreendedores.filter((item) => item.id === session.empreendedorId),
+    responsaveisTecnicos: state.responsaveisTecnicos.filter((item) => item.empreendedorId === session.empreendedorId),
     empreendimentos: state.empreendimentos.filter((item) => enterpriseIds.has(item.id)),
     processos: state.processos.filter((item) => processIds.has(item.id)),
     fiscalizacoes: state.fiscalizacoes.filter((item) => processIds.has(item.processoId)),
     auditoria: [],
-    notificacoes: []
+    notificacoes: state.notificacoes
   };
 }
 
@@ -33,12 +34,14 @@ export const routeRoles: Record<string, AuthSession["perfil"][]> = {
   dashboard: ["Administrador", "Analista", "Fiscal", "Empreendedor"],
   processos: ["Administrador", "Analista", "Fiscal", "Empreendedor"],
   empreendedores: ["Administrador", "Analista"],
+  responsaveis: ["Administrador", "Analista", "Empreendedor"],
   empreendimentos: ["Administrador", "Analista", "Empreendedor"],
   atividades: ["Administrador", "Analista"],
   taxas: ["Administrador"],
   fiscalizacao: ["Administrador", "Analista", "Fiscal"],
   usuarios: ["Administrador"],
   modelos: ["Administrador", "Analista"],
+  conteudos: ["Administrador", "Analista"],
   relatorios: ["Administrador", "Analista", "Fiscal", "Empreendedor"],
   configuracoes: ["Administrador"]
 };

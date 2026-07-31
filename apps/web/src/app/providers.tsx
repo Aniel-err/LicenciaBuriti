@@ -1,13 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { getUserErrorMessage, loadAppState, loginApi, perfilFromRole } from "../api";
+import { getUserErrorMessage, loadAppState, loginApi, perfilFromRole, registerApi, type LoginResponse } from "../api";
 import { atividadesSeed, auditoriaSeed, configuracaoSeed, empreendedoresSeed, empreendimentosSeed, fiscalizacoesSeed, modelosSeed, notificacoesSeed, processosSeed, taxasSeed, usuariosSeed } from "../data";
 import { stateForSession, type AuthSession } from "../security/access";
 import type { AppState } from "../types";
 
 const SESSION_KEY = "licencia-buriti-session-v2";
 const mockEnabled = import.meta.env.DEV || import.meta.env.VITE_USE_MOCK_DATA === "true";
-const emptyState: AppState = { usuarios: [], empreendedores: [], empreendimentos: [], atividades: [], processos: [], taxas: [], fiscalizacoes: [], modelos: [], configuracao: configuracaoSeed, auditoria: [], notificacoes: [] };
-const devState: AppState = { usuarios: usuariosSeed, empreendedores: empreendedoresSeed, empreendimentos: empreendimentosSeed, atividades: atividadesSeed, processos: processosSeed, taxas: taxasSeed, fiscalizacoes: fiscalizacoesSeed, modelos: modelosSeed, configuracao: configuracaoSeed, auditoria: auditoriaSeed, notificacoes: notificacoesSeed };
+const emptyState: AppState = { usuarios: [], empreendedores: [], responsaveisTecnicos: [], empreendimentos: [], atividades: [], processos: [], taxas: [], fiscalizacoes: [], modelos: [], conteudos: [], configuracao: configuracaoSeed, auditoria: [], notificacoes: [] };
+const devState: AppState = { usuarios: usuariosSeed, empreendedores: empreendedoresSeed, responsaveisTecnicos: [], empreendimentos: empreendimentosSeed, atividades: atividadesSeed, processos: processosSeed, taxas: taxasSeed, fiscalizacoes: fiscalizacoesSeed, modelos: modelosSeed, conteudos: [], configuracao: configuracaoSeed, auditoria: auditoriaSeed, notificacoes: notificacoesSeed };
 
 type AppContextValue = {
   session: AuthSession | null;
@@ -15,6 +15,7 @@ type AppContextValue = {
   loading: boolean;
   error: string;
   login(email: string, password: string): Promise<void>;
+  register(data: Record<string, string>): Promise<void>;
   logout(): void;
   refresh(): Promise<void>;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
@@ -58,12 +59,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
-    const response = await loginApi(email, password);
+  const acceptSession = (response: LoginResponse) => {
     const next: AuthSession = { userId: response.user.id, nome: response.user.name, email: response.user.email, perfil: perfilFromRole(response.user.role), empreendedorId: response.user.entrepreneurId ?? undefined, token: response.token };
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
     setSession(next);
   };
+  const login = async (email: string, password: string) => acceptSession(await loginApi(email, password));
+  const register = async (data: Record<string, string>) => acceptSession(await registerApi(data));
 
   useEffect(() => {
     const expire = () => logout();
@@ -74,7 +76,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (session) void refresh(); }, [session?.token]);
 
   const state = useMemo(() => session ? stateForSession(rawState, session) : rawState, [rawState, session]);
-  const value = useMemo<AppContextValue>(() => ({ session, state, loading, error, login, logout, refresh, setState, clearError: () => setError("") }), [session, state, loading, error]);
+  const value = useMemo<AppContextValue>(() => ({ session, state, loading, error, login, register, logout, refresh, setState, clearError: () => setError("") }), [session, state, loading, error]);
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 

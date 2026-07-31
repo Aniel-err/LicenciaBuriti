@@ -3,7 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import { AppProvider, useApp } from "./providers";
 import { Skeleton } from "../components/ui";
 import { LoginPage } from "../features/auth/LoginPage";
-import { LicenseValidationPage, PublicHome, PublicSearchPage } from "../features/public/PublicPages";
+import { ForgotPasswordPage, RegisterPage, ResetPasswordPage } from "../features/auth/AccountPages";
+import { InstitutionalContentPage, LicenseValidationPage, PublicHome, PublicSearchPage } from "../features/public/PublicPages";
 import { RegistryPage, ReportsPage, SettingsPage } from "../features/registry/RegistryPages";
 import { AppLayout } from "../layouts/AppLayout";
 import { PublicLayout } from "../layouts/PublicLayout";
@@ -28,13 +29,13 @@ function Forbidden() { return <main className="error-page"><strong>403</strong><
 export function App() {
   return <BrowserRouter><AppProvider><Suspense fallback={<div className="route-loading"><Skeleton rows={6} /></div>}><Routes>
     <Route path="/login" element={<LoginPage />} />
-    <Route element={<PublicLayout />}><Route index element={<PublicHome />} /><Route path="consulta" element={<PublicSearchPage />} /><Route path="validar-documento" element={<LicenseValidationPage />} /></Route>
+    <Route element={<PublicLayout />}><Route index element={<PublicHome />} /><Route path="cadastro" element={<RegisterPage />} /><Route path="recuperar-senha" element={<ForgotPasswordPage />} /><Route path="redefinir-senha" element={<ResetPasswordPage />} /><Route path="manual" element={<InstitutionalContentPage type="MANUAL" />} /><Route path="legislacao" element={<InstitutionalContentPage type="LEGISLACAO" />} /><Route path="consulta" element={<PublicSearchPage />} /><Route path="validar-documento" element={<LicenseValidationPage />} /></Route>
     <Route path="/403" element={<Forbidden />} />
     <Route element={<Protected><AppLayout /></Protected>}>
       <Route path="dashboard" element={<Authorized route="dashboard"><DashboardPage /></Authorized>} />
       <Route path="processos" element={<Authorized route="processos"><ProcessesPage /></Authorized>} />
       <Route path="processos/:processId" element={<Authorized route="processos"><ProcessesPage /></Authorized>} />
-      {(["empreendedores", "empreendimentos", "atividades", "taxas", "fiscalizacao", "usuarios", "modelos"] as const).map((route) => <Route key={route} path={route} element={<Authorized route={route}><RegistryPage type={route} /></Authorized>} />)}
+      {(["empreendedores", "responsaveis", "empreendimentos", "atividades", "taxas", "fiscalizacao", "usuarios", "modelos", "conteudos"] as const).map((route) => <Route key={route} path={route} element={<Authorized route={route}><RegistryPage type={route} /></Authorized>} />)}
       <Route path="relatorios" element={<Authorized route="relatorios"><ReportsPage /></Authorized>} />
       <Route path="configuracoes" element={<Authorized route="configuracoes"><SettingsPage /></Authorized>} />
     </Route>

@@ -58,24 +58,47 @@ enum InspectionType {
   NOTIFICACAO
 }
 
+enum ConditionStatus {
+  PENDENTE
+  EM_CUMPRIMENTO
+  CUMPRIDA
+  VENCIDA
+}
+
+enum NotificationType {
+  PRAZO_PROCESSO
+  DOCUMENTO
+  CONDICIONANTE
+  LICENCA
+  SISTEMA
+}
+
+enum InstitutionalContentType {
+  MANUAL
+  LEGISLACAO
+}
+
 model User {
-  id           String       @id @default(cuid())
-  name         String
-  email        String       @unique
-  passwordHash String
-  role         UserRole
-  phone        String?
-  isActive     Boolean      @default(true)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  entrepreneur Entrepreneur?
-  assigned     Process[]    @relation("AnalystProcesses")
-  auditLogs    AuditLog[]
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  passwordHash        String
+  role                UserRole
+  phone               String?
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  entrepreneur        Entrepreneur?
+  assigned            Process[]            @relation("AnalystProcesses")
+  opinions            Opinion[]
+  passwordResetTokens PasswordResetToken[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
 }
 
 model Entrepreneur {
-  id                  String        @id @default(cuid())
-  userId              String?       @unique
+  id                  String             @id @default(cuid())
+  userId              String?            @unique
   personType          PersonType
   name                String
   cpf                 String?
@@ -88,9 +111,9 @@ model Entrepreneur {
   address             String
   phone               String
   email               String
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-  user                User?         @relation(fields: [userId], references: [id])
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  user                User?              @relation(fields: [userId], references: [id])
   technicalManagers   TechnicalManager[]
   enterprises         Enterprise[]
   processes           Process[]
@@ -99,63 +122,85 @@ model Entrepreneur {
 model TechnicalManager {
   id             String       @id @default(cuid())
   entrepreneurId String
+  enterpriseId   String?
   name           String
   cpf            String
+  council        String?
   professionalId String
   artDocument    String?
   phone          String
   email          String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   entrepreneur   Entrepreneur @relation(fields: [entrepreneurId], references: [id])
+  enterprise     Enterprise?  @relation(fields: [enterpriseId], references: [id])
+
+  @@index([entrepreneurId])
+  @@index([enterpriseId])
 }
 
 model Enterprise {
-  id             String       @id @default(cuid())
-  entrepreneurId String
-  name           String
-  address        String
-  municipality   String       @default("Buriti - MA")
-  latitude       Decimal?
-  longitude      Decimal?
-  activityId     String
-  areaHectares   Decimal?
-  fiscalModules  Decimal?
-  size           String
-  pollutionLevel String
-  propertyClass  String
-  entrepreneur   Entrepreneur @relation(fields: [entrepreneurId], references: [id])
-  activity       Activity     @relation(fields: [activityId], references: [id])
-  processes      Process[]
+  id                String             @id @default(cuid())
+  entrepreneurId    String
+  name              String
+  address           String
+  municipality      String             @default("Buriti - MA")
+  latitude          Decimal?
+  longitude         Decimal?
+  activityId        String
+  areaHectares      Decimal?
+  fiscalModules     Decimal?
+  size              String
+  pollutionLevel    String
+  propertyClass     String
+  district          String?
+  zone              String             @default("URBANA")
+  entrepreneur      Entrepreneur       @relation(fields: [entrepreneurId], references: [id])
+  activity          Activity           @relation(fields: [activityId], references: [id])
+  technicalManagers TechnicalManager[]
+  processes         Process[]
+
+  @@index([entrepreneurId])
+  @@index([activityId])
+  @@index([district])
+  @@index([zone])
 }
 
 model Activity {
-  id                String       @id @default(cuid())
-  code              String       @unique
+  id                String        @id @default(cuid())
+  code              String        @unique
   description       String
   size              String
   pollutionLevel    String
   requiredLicenses  LicenseType[]
   requiredDocuments String[]
-  createdAt         DateTime     @default(now())
+  legalBasis        String?
+  isActive          Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
   enterprises       Enterprise[]
   fees              Fee[]
 }
 
 model Process {
-  id             String         @id @default(cuid())
-  number         String         @unique
-  protocol       String         @unique
+  id             String           @id @default(cuid())
+  number         String           @unique
+  protocol       String           @unique
   entrepreneurId String
   enterpriseId   String
   analystId      String?
   licenseType    LicenseType
-  status         ProcessStatus  @default(RECEBIDO)
-  openedAt       DateTime       @default(now())
+  status         ProcessStatus    @default(RECEBIDO)
+  openedAt       DateTime         @default(now())
   dueDate        DateTime
   decidedAt      DateTime?
   publicSummary  String?
-  entrepreneur   Entrepreneur  @relation(fields: [entrepreneurId], references: [id])
-  enterprise     Enterprise    @relation(fields: [enterpriseId], references: [id])
-  analyst        User?          @relation("AnalystProcesses", fields: [analystId], references: [id])
+  renewalOfId    String?
+  entrepreneur   Entrepreneur     @relation(fields: [entrepreneurId], references: [id])
+  enterprise     Enterprise       @relation(fields: [enterpriseId], references: [id])
+  analyst        User?            @relation("AnalystProcesses", fields: [analystId], references: [id])
+  renewalOf      Process?         @relation("ProcessRenewals", fields: [renewalOfId], references: [id])
+  renewals       Process[]        @relation("ProcessRenewals")
   documents      Document[]
   issuedDocs     IssuedDocument[]
   opinions       Opinion[]
@@ -163,6 +208,14 @@ model Process {
   inspections    Inspection[]
   messages       Message[]
   history        ProcessHistory[]
+  notifications  Notification[]
+
+  @@index([status])
+  @@index([licenseType])
+  @@index([analystId])
+  @@index([openedAt])
+  @@index([dueDate])
+  @@index([renewalOfId])
 }
 
 model ProcessSequence {
@@ -171,95 +224,151 @@ model ProcessSequence {
   updatedAt  DateTime @updatedAt
 }
 
+model DocumentSequence {
+  year       Int
+  prefix     String
+  nextNumber Int      @default(1)
+  updatedAt  DateTime @updatedAt
+
+  @@id([year, prefix])
+}
+
 model LicenseRule {
-  id                String      @id @default(cuid())
-  licenseType       LicenseType @unique
-  displayName       String
-  deadlineDays      Int         @default(30)
-  validityDays      Int         @default(365)
-  requiresInspection Boolean    @default(false)
-  requiredDocuments String[]
-  legalBasis        String?
-  isActive          Boolean     @default(true)
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  licenseType        LicenseType @unique
+  displayName        String
+  deadlineDays       Int         @default(30)
+  validityDays       Int         @default(365)
+  requiresInspection Boolean     @default(false)
+  requiredDocuments  String[]
+  legalBasis         String?
+  isActive           Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 }
 
 model Document {
-  id          String         @id @default(cuid())
-  processId   String
-  name        String
-  fileName    String?
-  filePath    String?
-  storageKey  String?
-  fileSha256  String?
+  id            String         @id @default(cuid())
+  processId     String
+  name          String
+  fileName      String?
+  filePath      String?
+  storageKey    String?
+  fileSha256    String?
   fileSizeBytes Int?
-  mimeType    String?
-  status      DocumentStatus @default(PENDENTE)
-  notes       String?
-  uploadedAt  DateTime?
-  version     Int            @default(0)
-  process     Process        @relation(fields: [processId], references: [id])
+  mimeType      String?
+  status        DocumentStatus @default(PENDENTE)
+  notes         String?
+  uploadedAt    DateTime?
+  version       Int            @default(0)
+  process       Process        @relation(fields: [processId], references: [id])
+
+  @@index([processId])
+  @@index([status])
 }
 
 model IssuedDocument {
-  id          String      @id @default(cuid())
-  processId   String
-  type        String
-  number      String      @unique
-  validationCode String?  @unique
-  filePath    String?
-  signedBy    String?
-  issuedAt    DateTime    @default(now())
-  validUntil  DateTime?
-  process     Process     @relation(fields: [processId], references: [id])
+  id                 String    @id @default(cuid())
+  processId          String
+  type               String
+  number             String    @unique
+  validationCode     String?   @unique
+  fileName           String?
+  filePath           String?
+  storageKey         String?
+  fileSha256         String?
+  signature          String?
+  signatureAlgorithm String?
+  mimeType           String    @default("application/pdf")
+  signedBy           String?
+  signedAt           DateTime?
+  issuedAt           DateTime  @default(now())
+  validUntil         DateTime?
+  process            Process   @relation(fields: [processId], references: [id])
+
+  @@index([processId])
+  @@index([type])
+  @@index([validUntil])
 }
 
 model Opinion {
-  id          String   @id @default(cuid())
-  processId   String
-  authorId    String
-  conclusion  String
-  content     String
-  createdAt   DateTime @default(now())
-  process     Process  @relation(fields: [processId], references: [id])
+  id         String   @id @default(cuid())
+  processId  String
+  authorId   String
+  conclusion String
+  content    String
+  createdAt  DateTime @default(now())
+  process    Process  @relation(fields: [processId], references: [id])
+  author     User     @relation(fields: [authorId], references: [id])
+
+  @@index([processId])
+  @@index([authorId])
 }
 
 model Condition {
-  id          String   @id @default(cuid())
-  processId   String
-  description String
-  dueDate     DateTime
-  status      String   @default("PENDENTE")
-  completedAt DateTime?
-  process     Process  @relation(fields: [processId], references: [id])
+  id            String          @id @default(cuid())
+  processId     String
+  description   String
+  dueDate       DateTime
+  status        ConditionStatus @default(PENDENTE)
+  notes         String?
+  completedAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  process       Process         @relation(fields: [processId], references: [id])
+  notifications Notification[]
+
+  @@index([processId])
+  @@index([status])
+  @@index([dueDate])
 }
 
 model Inspection {
-  id          String         @id @default(cuid())
-  processId   String
-  fiscalId    String
-  type        InspectionType
-  scheduledAt DateTime?
-  latitude    Decimal?
-  longitude   Decimal?
-  report      String
-  photos      String[]
-  status      String         @default("AGENDADA")
-  validatedAt DateTime?
-  validatedBy String?
+  id              String                 @id @default(cuid())
+  processId       String
+  fiscalId        String
+  type            InspectionType
+  scheduledAt     DateTime?
+  latitude        Decimal?
+  longitude       Decimal?
+  report          String
+  photos          String[]
+  status          String                 @default("AGENDADA")
+  validatedAt     DateTime?
+  validatedBy     String?
   validationNotes String?
-  createdAt   DateTime       @default(now())
-  process     Process        @relation(fields: [processId], references: [id])
+  createdAt       DateTime               @default(now())
+  process         Process                @relation(fields: [processId], references: [id])
+  attachments     InspectionAttachment[]
+
+  @@index([processId])
+  @@index([fiscalId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model InspectionAttachment {
+  id            String     @id @default(cuid())
+  inspectionId  String
+  fileName      String
+  filePath      String
+  storageKey    String
+  fileSha256    String
+  fileSizeBytes Int
+  mimeType      String
+  createdAt     DateTime   @default(now())
+  inspection    Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
 }
 
 model Message {
-  id          String   @id @default(cuid())
-  processId   String
-  senderName  String
-  content     String
-  createdAt   DateTime @default(now())
-  process     Process  @relation(fields: [processId], references: [id])
+  id         String   @id @default(cuid())
+  processId  String
+  senderName String
+  content    String
+  createdAt  DateTime @default(now())
+  process    Process  @relation(fields: [processId], references: [id])
 }
 
 model ProcessHistory {
@@ -273,12 +382,14 @@ model ProcessHistory {
 }
 
 model Fee {
-  id           String      @id @default(cuid())
-  activityId   String
-  licenseType  LicenseType
-  size         String
-  amountCents  Int
-  activity     Activity    @relation(fields: [activityId], references: [id])
+  id          String      @id @default(cuid())
+  activityId  String
+  licenseType LicenseType
+  size        String
+  amountCents Int
+  activity    Activity    @relation(fields: [activityId], references: [id])
+
+  @@index([activityId])
 }
 
 model News {
@@ -287,6 +398,22 @@ model News {
   body        String
   publishedAt DateTime @default(now())
   isPublished Boolean  @default(true)
+}
+
+model InstitutionalContent {
+  id          String                   @id @default(cuid())
+  type        InstitutionalContentType
+  title       String
+  summary     String?
+  body        String
+  reference   String?
+  publishedAt DateTime                 @default(now())
+  isPublished Boolean                  @default(true)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([type])
+  @@index([isPublished])
 }
 
 model DocumentTemplate {
@@ -300,28 +427,66 @@ model DocumentTemplate {
 }
 
 model SystemConfig {
-  id                    String   @id @default("default")
-  agency                String
-  municipality          String
-  analysisDeadlineDays  Int      @default(30)
-  expirationAlertDays   Int      @default(45)
-  maxUploadMb           Int      @default(10)
-  publicSearchEnabled   Boolean  @default(true)
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default("default")
+  agency               String
+  municipality         String
+  analysisDeadlineDays Int      @default(30)
+  expirationAlertDays  Int      @default(45)
+  maxUploadMb          Int      @default(10)
+  publicSearchEnabled  Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  processId   String?
+  conditionId String?
+  type        NotificationType
+  title       String
+  message     String
+  dueAt       DateTime?
+  isRead      Boolean          @default(false)
+  dedupeKey   String           @unique
+  createdAt   DateTime         @default(now())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  process     Process?         @relation(fields: [processId], references: [id], onDelete: Cascade)
+  condition   Condition?       @relation(fields: [conditionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([processId])
+  @@index([dueAt])
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?
-  requestId   String?
-  action      String
-  entity      String
-  entityId    String?
-  ip          String?
-  userAgent   String?
-  metadata    Json?
-  before      Json?
-  after       Json?
-  createdAt   DateTime @default(now())
-  user        User?    @relation(fields: [userId], references: [id])
+  id        String   @id @default(cuid())
+  userId    String?
+  requestId String?
+  action    String
+  entity    String
+  entityId  String?
+  ip        String?
+  userAgent String?
+  metadata  Json?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
 }

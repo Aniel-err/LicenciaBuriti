@@ -19,10 +19,29 @@ export type Empreendedor = {
   tipo: TipoPessoa;
   nome: string;
   documento: string;
+  cpf?: string;
+  rg?: string;
+  razaoSocial?: string;
+  nomeFantasia?: string;
+  cnpj?: string;
+  inscricaoEstadual?: string;
   responsavelLegal: string;
   telefone: string;
   email: string;
   endereco: string;
+};
+
+export type ResponsavelTecnico = {
+  id: string;
+  empreendedorId: string;
+  empreendimentoId?: string;
+  nome: string;
+  cpf: string;
+  conselho: string;
+  registroProfissional: string;
+  telefone: string;
+  email: string;
+  artDisponivel: boolean;
 };
 
 export type Usuario = {
@@ -45,6 +64,8 @@ export type Atividade = {
   potencial: string;
   licencas: string[];
   documentos: string[];
+  baseLegal?: string;
+  ativo?: boolean;
 };
 
 export type Empreendimento = {
@@ -57,9 +78,12 @@ export type Empreendimento = {
   longitude: string;
   atividadeId: string;
   area: string;
+  modulosFiscais?: string;
   porte: string;
   potencial: string;
   classificacao: "Urbano" | "Rural";
+  bairro?: string;
+  zona?: "URBANA" | "RURAL";
 };
 
 export type Documento = {
@@ -93,6 +117,15 @@ export type Processo = {
   abertura: string;
   parecer?: string;
   condicionantes: string[];
+  pareceres?: Array<{ id: string; conclusao: string; conteudo: string; autor?: string; data: string }>;
+  condicionantesDetalhadas?: Array<{
+    id: string;
+    descricao: string;
+    prazo: string;
+    status: "Pendente" | "Em cumprimento" | "Cumprida" | "Vencida";
+    observacao?: string;
+    concluidaEm?: string;
+  }>;
   documentos: Documento[];
   mensagens: Array<{ id: string; autor: string; texto: string; data: string }>;
   timeline: TimelineItem[];
@@ -100,7 +133,19 @@ export type Processo = {
     numero: string;
     data: string;
     validade: string;
+    id?: string;
+    tipo?: string;
+    disponivelParaDownload?: boolean;
   };
+  documentosEmitidos?: Array<{
+    id: string;
+    numero: string;
+    tipo: string;
+    emissao: string;
+    validade?: string;
+    disponivelParaDownload: boolean;
+  }>;
+  renovacaoDeId?: string;
 };
 
 export type Taxa = {
@@ -124,14 +169,26 @@ export type Fiscalizacao = {
   validadaPor?: string;
   conclusao?: string;
   fotos: string[];
+  anexos?: Array<{ id: string; nome: string; tipo: string }>;
 };
 
 export type ModeloDocumento = {
   id: string;
   nome: string;
-  tipo: "Licença" | "Parecer" | "Notificação" | "Certidão" | "Autorização";
+  tipo: "Licença" | "Parecer" | "Notificação" | "Certidão" | "Declaração" | "Autorização" | "Ofício";
   conteudo: string;
   ativo: boolean;
+};
+
+export type ConteudoInstitucional = {
+  id: string;
+  tipo: "Manual" | "Legislação" | "Notícia";
+  titulo: string;
+  resumo?: string;
+  conteudo: string;
+  referencia?: string;
+  publicadoEm: string;
+  publicado: boolean;
 };
 
 export type Configuracao = {
@@ -158,18 +215,22 @@ export type Notificacao = {
   titulo: string;
   mensagem: string;
   lida: boolean;
-  tipo: "Prazo" | "Documento" | "Sistema" | "Licença";
+  tipo: "Prazo" | "Documento" | "Condicionante" | "Sistema" | "Licença";
+  processoId?: string;
+  vencimento?: string;
 };
 
 export type AppState = {
   usuarios: Usuario[];
   empreendedores: Empreendedor[];
+  responsaveisTecnicos: ResponsavelTecnico[];
   empreendimentos: Empreendimento[];
   atividades: Atividade[];
   processos: Processo[];
   taxas: Taxa[];
   fiscalizacoes: Fiscalizacao[];
   modelos: ModeloDocumento[];
+  conteudos: ConteudoInstitucional[];
   configuracao: Configuracao;
   auditoria: Auditoria[];
   notificacoes: Notificacao[];
@@ -179,12 +240,14 @@ export type ModuleKey =
   | "dashboard"
   | "processos"
   | "empreendedores"
+  | "responsaveis"
   | "empreendimentos"
   | "atividades"
   | "taxas"
   | "fiscalizacao"
   | "usuarios"
   | "modelos"
+  | "conteudos"
   | "relatorios"
   | "configuracoes"
   | "consulta";
