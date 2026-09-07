@@ -18,7 +18,7 @@ export const permissions = {
   "document.upload": ["ADMIN", "ANALISTA", "EMPREENDEDOR"],
   "document.validate": ["ADMIN", "ANALISTA"],
   "document.download": ["ADMIN", "ANALISTA", "FISCAL", "EMPREENDEDOR"],
-  "inspection.create": ["ADMIN", "ANALISTA"],
+  "inspection.create": ["ADMIN", "ANALISTA", "FISCAL"],
   "inspection.validate": ["ADMIN", "ANALISTA", "FISCAL"],
   "license.issue": ["ADMIN", "ANALISTA"],
   "reports.read": ["ADMIN", "ANALISTA", "FISCAL", "EMPREENDEDOR"]

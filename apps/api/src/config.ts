@@ -20,6 +20,18 @@ export const config = {
   jwtSecret: requireJwtSecret(),
   isProduction,
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? (isProduction ? 300 : 5000)),
+  appUrl: process.env.APP_URL?.trim() || (isProduction ? "" : "http://localhost:5173"),
+  smtp: {
+    host: process.env.SMTP_HOST?.trim() || "",
+    port: Number(process.env.SMTP_PORT ?? 587),
+    secure: process.env.SMTP_SECURE === "true",
+    user: process.env.SMTP_USER?.trim() || "",
+    pass: process.env.SMTP_PASS || "",
+    from: process.env.SMTP_FROM?.trim() || "Licenca Buriti <nao-responda@buriti.ma.gov.br>"
+  },
+  passwordResetMinutes: Number(process.env.PASSWORD_RESET_MINUTES ?? 30),
+  notificationSweepMinutes: Math.max(5, Number(process.env.NOTIFICATION_SWEEP_MINUTES ?? 360)),
+  documentSigningSecret: process.env.DOCUMENT_SIGNING_SECRET?.trim() || "",
   webOrigins: (() => {
     const origins = Array.from(new Set([
       ...(process.env.WEB_ORIGIN ?? "")

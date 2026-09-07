@@ -133,11 +133,11 @@ documentsRouter.get("/:id/download", requireAuth, async (req, res) => {
     where: { id: documentId, process: processScope(user) },
     select: { id: true, fileName: true, filePath: true, processId: true }
   });
-  if (!currentDocument?.filePath) return res.status(404).json({ error: "Arquivo nao encontrado" });
+  if (!currentDocument?.filePath) return res.status(404).json({ error: "Arquivo não encontrado" });
 
   const resolvedFile = resolveDocumentFile(currentDocument.filePath);
   if (!resolvedFile) {
-    return res.status(404).json({ error: "Arquivo nao encontrado" });
+    return res.status(404).json({ error: "Arquivo não encontrado" });
   }
 
   try {
@@ -152,7 +152,7 @@ documentsRouter.get("/:id/download", requireAuth, async (req, res) => {
       entityId: documentId,
       error: errorToLog(error)
     }, "document_download_missing_file");
-    return res.status(404).json({ error: "Arquivo nao encontrado" });
+    return res.status(404).json({ error: "Arquivo não encontrado" });
   }
 
   await recordAudit(user, "DOCUMENT_DOWNLOAD", "Document", documentId, { processId: currentDocument.processId });

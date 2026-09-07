@@ -5,6 +5,7 @@
 - Definir `DATABASE_URL` com usuario restrito ao banco do sistema.
 - Definir `JWT_SECRET` com valor aleatorio de pelo menos 32 caracteres.
 - Definir `WEB_ORIGIN` com origem HTTPS real do frontend.
+- Definir `APP_URL`, `DOCUMENT_SIGNING_SECRET` e credenciais SMTP.
 - Definir `SEED_ADMIN_PASSWORD` somente durante carga inicial controlada.
 - Nao executar seed em producao sem janela de manutencao.
 
@@ -12,6 +13,7 @@
 
 - Executar `npm --workspace @licencia-buriti/api exec prisma migrate deploy`.
 - Verificar backup antes de cada deploy.
+- Confirmar que a extensão PostGIS e os índices GIST foram criados pela migration.
 - Testar restore do backup periodicamente.
 - Monitorar tamanho de tabelas `AuditLog`, `Document`, `IssuedDocument` e uploads.
 
@@ -40,7 +42,7 @@
 
 - Para assinatura digital juridicamente forte, integrar certificado A1/A3 ou provedor ICP-Brasil.
 - Guardar cadeia de assinatura e carimbo de tempo junto ao documento emitido.
-- Para recuperacao de senha e 2FA, integrar provedor de e-mail/SMS/TOTP antes de liberar contas externas.
+- Para recuperação de senha, configurar o provedor SMTP antes de liberar contas externas.
 
 ## Deploy
 
@@ -50,3 +52,8 @@
 - Reiniciar API.
 - Validar `/health`.
 - Validar consulta publica e emissao de licenca em ambiente de homologacao.
+
+## Dependências
+
+- A aplicação usa `BrowserRouter` como SPA e não utiliza React Server Components.
+- O alerta upstream `GHSA-qwww-vcr4-c8h2`, restrito ao modo RSC do React Router, não possui versão estável corrigida publicada no npm em 30/07/2026; acompanhar uma atualização oficial antes do próximo deploy.

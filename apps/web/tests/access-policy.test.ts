@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { stateForSession } from "../src/App.js";
+import { stateForSession } from "../src/security/access.js";
 import type { AppState } from "../src/types.js";
 
 const state: AppState = {
@@ -11,6 +11,7 @@ const state: AppState = {
     { id: "emp-1", tipo: "PJ", nome: "Empresa 1", documento: "1", responsavelLegal: "Owner", telefone: "", email: "", endereco: "" },
     { id: "emp-2", tipo: "PJ", nome: "Empresa 2", documento: "2", responsavelLegal: "Other", telefone: "", email: "", endereco: "" }
   ],
+  responsaveisTecnicos: [],
   empreendimentos: [
     { id: "end-1", empreendedorId: "emp-1", nome: "Area 1", endereco: "", municipio: "", latitude: "", longitude: "", atividadeId: "ativ-1", area: "", porte: "", potencial: "", classificacao: "Urbano" }
   ],
@@ -21,6 +22,7 @@ const state: AppState = {
   taxas: [],
   fiscalizacoes: [{ id: "fis-1", processoId: "proc-1", tipo: "Vistoria", fiscal: "F", data: "-", gps: "", relatorio: "", fotos: [] }],
   modelos: [],
+  conteudos: [],
   configuracao: { orgao: "Orgao", municipio: "Cidade", prazoAnaliseDias: 30, alertaVencimentoDias: 45, tamanhoMaxUploadMb: 10, consultaPublicaAtiva: true },
   auditoria: [{ id: "aud-1", data: "-", usuario: "Other", acao: "READ", entidade: "proc-1", detalhe: "" }],
   notificacoes: [{ id: "not-1", data: "-", titulo: "Alerta", mensagem: "Privado", lida: false, tipo: "Sistema" }]

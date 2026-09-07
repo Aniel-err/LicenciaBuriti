@@ -1,0 +1,14 @@
+.git
+.github
+.agents
+node_modules
+dist
+uploads
+backups
+tmp
+*.log
+.env
+.env.local
+.env.production
+playwright-report
+test-results

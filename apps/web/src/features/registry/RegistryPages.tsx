@@ -1,0 +1,193 @@
+import { Download, ExternalLink, Plus, Printer, Save, Search } from "lucide-react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { createActivityApi, createEnterpriseApi, createEntrepreneurApi, createFeeApi, createInspectionApi, createInstitutionalContentApi, createTechnicalManagerApi, createTemplateApi, createUserApi, downloadInspectionAttachmentApi, downloadTechnicalManagerArtApi, getUserErrorMessage, saveSettingsApi, updateActivityApi, updateEnterpriseApi, updateEntrepreneurApi, updateFeeApi, updateInstitutionalContentApi, updateTechnicalManagerApi, updateTemplateApi, updateTemplateStatusApi, updateUserApi, updateUserStatusApi, validateInspectionApi } from "../../api";
+import { useApp } from "../../app/providers";
+import { Button, EmptyState, Modal, PageHeader, SearchField, StatusBadge } from "../../components/ui";
+import type { Atividade, ConteudoInstitucional, Empreendedor, Empreendimento, Fiscalizacao, ModeloDocumento, ModuleKey, ResponsavelTecnico, Taxa, Usuario } from "../../types";
+import { saveBlob } from "../../utils/download";
+
+type Row = { id: string; cells: ReactNode[] };
+
+const registryConfig: Partial<Record<ModuleKey, { title: string; description: string; columns: string[] }>> = {
+  empreendedores: { title: "Empreendedores", description: "Pessoas físicas e jurídicas vinculadas aos processos.", columns: ["Tipo", "Nome", "Documento", "Contato", "Endereço"] },
+  responsaveis: { title: "Responsáveis técnicos", description: "Profissionais habilitados e ARTs vinculados aos empreendimentos.", columns: ["Nome", "Empreendedor", "Empreendimento", "Conselho / registro", "Contato", "ART"] },
+  empreendimentos: { title: "Empreendimentos", description: "Unidades, atividades e localização ambiental.", columns: ["Nome", "Proprietário", "Município", "Porte", "Potencial", "Localização"] },
+  atividades: { title: "Atividades", description: "Catálogo municipal de atividades licenciáveis.", columns: ["Código", "Descrição", "Porte", "Potencial", "Licenças"] },
+  taxas: { title: "Taxas", description: "Valores por atividade, licença e porte.", columns: ["Atividade", "Licença", "Porte", "Valor"] },
+  usuarios: { title: "Usuários", description: "Contas, perfis e vínculos de acesso.", columns: ["Nome", "E-mail", "Perfil", "Status", "Último acesso"] },
+  modelos: { title: "Modelos de documentos", description: "Conteúdo e variáveis usadas nos documentos oficiais.", columns: ["Nome", "Tipo", "Status", "Prévia"] },
+  conteudos: { title: "Conteúdo público", description: "Manual, legislação, notícias e avisos publicados pela Secretaria.", columns: ["Tipo", "Título", "Publicação", "Status", "Prévia"] },
+  fiscalizacao: { title: "Fiscalização", description: "Agenda operacional de vistorias e ações de campo.", columns: ["Processo", "Tipo", "Fiscal", "Data", "Coordenadas", "Anexos", "Status", "Ações"] }
+};
+
+export function RegistryPage({ type }: { type: ModuleKey }) {
+  const { state, session, refresh, notify } = useApp(); const config = registryConfig[type]; const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [editingUser, setEditingUser] = useState<Usuario | null>(null); const [editingActivity, setEditingActivity] = useState<Atividade | null>(null); const [editingFee, setEditingFee] = useState<Taxa | null>(null); const [editingContent, setEditingContent] = useState<ConteudoInstitucional | null>(null); const [editingEntrepreneur, setEditingEntrepreneur] = useState<Empreendedor | null>(null); const [editingEnterprise, setEditingEnterprise] = useState<Empreendimento | null>(null); const [editingManager, setEditingManager] = useState<ResponsavelTecnico | null>(null); const [editingModel, setEditingModel] = useState<ModeloDocumento | null>(null); const [busyAction, setBusyAction] = useState(""); const [inspectionToComplete, setInspectionToComplete] = useState<Fiscalizacao | null>(null); const [completionNotes, setCompletionNotes] = useState(""); const [completionError, setCompletionError] = useState("");
+  if (!config || !session) return null;
+  const runAction = async (name: string, action: () => Promise<unknown>, successMessage: string, shouldRefresh = true) => {
+    if (busyAction) return;
+    setBusyAction(name);
+    try {
+      await action();
+      if (shouldRefresh) await refresh();
+      notify(successMessage);
+    } catch (cause) {
+      notify(getUserErrorMessage(cause), "error");
+    } finally {
+      setBusyAction("");
+    }
+  };
+  const completeInspection = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!inspectionToComplete || busyAction) return;
+    if (completionNotes.trim().length < 5) {
+      setCompletionError("Informe uma conclusão com pelo menos 5 caracteres.");
+      return;
+    }
+    setBusyAction(`complete-${inspectionToComplete.id}`);
+    setCompletionError("");
+    try {
+      await validateInspectionApi(session.token, inspectionToComplete.id, completionNotes.trim());
+      await refresh();
+      notify("Fiscalização concluída e registrada no histórico do processo.");
+      setInspectionToComplete(null);
+      setCompletionNotes("");
+    } catch (cause) {
+      setCompletionError(getUserErrorMessage(cause, "Não foi possível concluir a fiscalização."));
+    } finally {
+      setBusyAction("");
+    }
+  };
+  const rows: Row[] = type === "empreendedores" ? state.empreendedores.map((item) => ({ id: item.id, cells: [item.tipo, item.nome, maskDocument(item.documento), item.email, item.endereco, <Button variant="ghost" onClick={() => setEditingEntrepreneur(item)}>Editar</Button>] }))
+    : type === "responsaveis" ? state.responsaveisTecnicos.map((item) => ({ id: item.id, cells: [item.nome, state.empreendedores.find((entry) => entry.id === item.empreendedorId)?.nome ?? "-", state.empreendimentos.find((entry) => entry.id === item.empreendimentoId)?.nome ?? "Todos", `${item.conselho} ${item.registroProfissional}`, item.email, <div className="document-actions"><Button variant="ghost" loading={busyAction === `art-${item.id}`} onClick={() => { if (!item.artDisponivel) { notify("Nenhuma ART está disponível para este responsável técnico. Edite o cadastro e envie um PDF.", "warning"); return; } void runAction(`art-${item.id}`, async () => saveBlob(await downloadTechnicalManagerArtApi(session.token, item.id), `ART-${item.nome}.pdf`), "Download da ART iniciado.", false); }}><Download />Baixar</Button><Button variant="ghost" onClick={() => setEditingManager(item)}>Editar</Button></div>] }))
+    : type === "empreendimentos" ? state.empreendimentos.map((item) => ({ id: item.id, cells: [item.nome, state.empreendedores.find((entry) => entry.id === item.empreendedorId)?.nome ?? "-", item.municipio, item.porte, item.potencial, item.latitude ? <a target="_blank" rel="noreferrer" href={`https://www.openstreetmap.org/?mlat=${item.latitude}&mlon=${item.longitude}`}>Abrir mapa <ExternalLink /></a> : "-", <Button variant="ghost" onClick={() => setEditingEnterprise(item)}>Editar</Button>] }))
+    : type === "atividades" ? state.atividades.map((item) => ({ id: item.id, cells: [item.codigo, item.descricao, item.porte, item.potencial, item.licencas.join(", "), <Button variant="ghost" onClick={() => setEditingActivity(item)}>Editar</Button>] }))
+    : type === "taxas" ? state.taxas.map((item) => ({ id: item.id, cells: [state.atividades.find((entry) => entry.id === item.atividadeId)?.descricao ?? "-", item.licenca, item.porte, money(item.valor), <Button variant="ghost" onClick={() => setEditingFee(item)}>Editar</Button>] }))
+    : type === "usuarios" ? state.usuarios.map((item) => ({ id: item.id, cells: [item.nome, item.email, item.perfil, <StatusBadge>{item.ativo ? "Ativo" : "Inativo"}</StatusBadge>, item.ultimoAcesso, <div className="document-actions"><Button variant="ghost" onClick={() => setEditingUser(item)}>Editar</Button><Button variant="ghost" disabled={item.id === session.userId} loading={busyAction === `user-${item.id}`} onClick={() => { if (!confirm(`${item.ativo ? "Desativar" : "Ativar"} ${item.nome}?`)) return; void runAction(`user-${item.id}`, () => updateUserStatusApi(session.token, item.id, !item.ativo), `Usuário ${item.ativo ? "desativado" : "ativado"} com sucesso.`); }}>{item.ativo ? "Desativar" : "Ativar"}</Button></div>] }))
+    : type === "modelos" ? state.modelos.map((item) => ({ id: item.id, cells: [item.nome, item.tipo, <StatusBadge>{item.ativo ? "Ativo" : "Inativo"}</StatusBadge>, item.conteudo.slice(0, 90), <div className="document-actions"><Button variant="ghost" onClick={() => setEditingModel(item)}>Editar</Button>{session.perfil === "Administrador" ? <Button variant="ghost" loading={busyAction === `template-${item.id}`} onClick={() => { if (!confirm(`${item.ativo ? "Desativar" : "Ativar"} este modelo?`)) return; void runAction(`template-${item.id}`, () => updateTemplateStatusApi(session.token, item.id, !item.ativo), `Modelo ${item.ativo ? "desativado" : "ativado"} com sucesso.`); }}>{item.ativo ? "Desativar" : "Ativar"}</Button> : null}</div>] }))
+    : type === "conteudos" ? state.conteudos.map((item) => ({ id: item.id, cells: [item.tipo, item.titulo, item.publicadoEm, <StatusBadge>{item.publicado ? "Publicado" : "Rascunho"}</StatusBadge>, item.conteudo.slice(0, 100), <Button variant="ghost" onClick={() => setEditingContent(item)}>Editar</Button>] }))
+    : state.fiscalizacoes.map((item) => ({ id: item.id, cells: [state.processos.find((entry) => entry.id === item.processoId)?.numero ?? "-", item.tipo, item.fiscal, item.data, item.gps || "-", item.anexos?.length ? <div className="document-actions">{item.anexos.map((attachment) => <Button variant="ghost" loading={busyAction === `attachment-${attachment.id}`} key={attachment.id} onClick={() => void runAction(`attachment-${attachment.id}`, async () => saveBlob(await downloadInspectionAttachmentApi(session.token, attachment.id), attachment.nome), "Download do anexo iniciado.", false)}><Download />{attachment.nome}</Button>)}</div> : "Nenhum anexo", <StatusBadge>{item.status ?? "Agendada"}</StatusBadge>, item.status !== "Validada" ? <Button variant="ghost" onClick={() => { setInspectionToComplete(item); setCompletionNotes(""); setCompletionError(""); }}><Save />Concluir</Button> : null] }));
+  const filtered = rows.filter((row) => row.cells.map(String).join(" ").toLowerCase().includes(query.toLowerCase()));
+  const canCreate = type === "atividades" || type === "taxas" || type === "usuarios" ? session.perfil === "Administrador" : type === "fiscalizacao" ? ["Administrador", "Analista", "Fiscal"].includes(session.perfil) : ["Administrador", "Analista", "Empreendedor"].includes(session.perfil);
+  const columns = [...config.columns, ...(["empreendedores", "empreendimentos", "usuarios", "modelos", "atividades", "taxas", "conteudos"].includes(type) ? ["Ações"] : [])];
+  return <><PageHeader title={config.title} description={config.description} actions={canCreate ? <Button onClick={() => setOpen(true)}><Plus />Adicionar</Button> : null} /><div className="registry-toolbar"><SearchField value={query} onChange={setQuery} placeholder={`Pesquisar em ${config.title.toLowerCase()}`} /><span>{filtered.length} registro(s)</span></div>{filtered.length ? <div className="data-table"><table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{filtered.map((row) => <tr key={row.id}>{row.cells.map((cell, index) => <td data-label={columns[index]} key={index}>{cell}</td>)}</tr>)}</tbody></table></div> : <EmptyState />}{open ? <RegistryForm type={type} onClose={() => setOpen(false)} /> : null}{editingUser ? <RegistryForm type="usuarios" initialUser={editingUser} onClose={() => setEditingUser(null)} /> : null}{editingActivity ? <RegistryForm type="atividades" initialActivity={editingActivity} onClose={() => setEditingActivity(null)} /> : null}{editingFee ? <RegistryForm type="taxas" initialFee={editingFee} onClose={() => setEditingFee(null)} /> : null}{editingContent ? <RegistryForm type="conteudos" initialContent={editingContent} onClose={() => setEditingContent(null)} /> : null}{editingEntrepreneur ? <RegistryForm type="empreendedores" initialEntrepreneur={editingEntrepreneur} onClose={() => setEditingEntrepreneur(null)} /> : null}{editingEnterprise ? <RegistryForm type="empreendimentos" initialEnterprise={editingEnterprise} onClose={() => setEditingEnterprise(null)} /> : null}{editingManager ? <RegistryForm type="responsaveis" initialManager={editingManager} onClose={() => setEditingManager(null)} /> : null}{editingModel ? <RegistryForm type="modelos" initialModel={editingModel} onClose={() => setEditingModel(null)} /> : null}{inspectionToComplete ? <Modal title="Concluir fiscalização" onClose={() => setInspectionToComplete(null)}><form className="typed-form" onSubmit={completeInspection}><p className="wide">Registre o resultado da vistoria. Esta informação será adicionada ao histórico do processo.</p><label className="wide">Conclusão<textarea value={completionNotes} onChange={(event) => { setCompletionNotes(event.target.value); setCompletionError(""); }} minLength={5} maxLength={4000} rows={6} required autoFocus /></label>{completionError ? <div className="field-error wide" role="alert">{completionError}</div> : null}<footer className="form-footer"><Button variant="secondary" type="button" onClick={() => setInspectionToComplete(null)}>Cancelar</Button><Button loading={busyAction === `complete-${inspectionToComplete.id}`} type="submit"><Save />Confirmar conclusão</Button></footer></form></Modal> : null}</>;
+}
+
+function RegistryForm({ type, onClose, initialUser, initialActivity, initialFee, initialContent, initialEntrepreneur, initialEnterprise, initialManager, initialModel }: { type: ModuleKey; onClose(): void; initialUser?: Usuario; initialActivity?: Atividade; initialFee?: Taxa; initialContent?: ConteudoInstitucional; initialEntrepreneur?: Empreendedor; initialEnterprise?: Empreendimento; initialManager?: ResponsavelTecnico; initialModel?: ModeloDocumento }) {
+  const { state, session, refresh, notify } = useApp(); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [personType, setPersonType] = useState<"PF" | "PJ">(initialEntrepreneur?.tipo ?? "PJ"); const [role, setRole] = useState<Usuario["perfil"]>(initialUser?.perfil ?? "Analista");
+  if (!session) return null;
+  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (saving) return; const data: Record<string, string> = {}; const formData = new FormData(event.currentTarget); formData.forEach((value, key) => { if (typeof value === "string") data[key] = value; }); const artFile = formData.get("art"); const inspectionFiles = formData.getAll("anexos").filter((value): value is File => value instanceof File && value.size > 0); setSaving(true); setError(""); try {
+    if (type === "empreendedores" && initialEntrepreneur) await updateEntrepreneurApi(session.token, initialEntrepreneur.id, { ...data, tipo: personType });
+    else if (type === "empreendedores") await createEntrepreneurApi(session.token, { ...data, tipo: personType });
+    else if (type === "responsaveis" && initialManager) await updateTechnicalManagerApi(session.token, initialManager.id, data, artFile instanceof File && artFile.size > 0 ? artFile : undefined);
+    else if (type === "responsaveis") await createTechnicalManagerApi(session.token, data, artFile instanceof File && artFile.size > 0 ? artFile : undefined);
+    else if (type === "empreendimentos" && initialEnterprise) await updateEnterpriseApi(session.token, initialEnterprise.id, data, data.empreendedorId ?? "", data.atividadeId ?? "", state.atividades.find((item) => item.id === data.atividadeId));
+    else if (type === "empreendimentos") await createEnterpriseApi(session.token, data, data.empreendedorId ?? "", data.atividadeId ?? "", state.atividades.find((item) => item.id === data.atividadeId));
+    else if (type === "atividades" && initialActivity) await updateActivityApi(session.token, initialActivity.id, data);
+    else if (type === "atividades") await createActivityApi(session.token, data);
+    else if (type === "taxas" && initialFee) await updateFeeApi(session.token, initialFee.id, data, data.atividadeId ?? "");
+    else if (type === "taxas") await createFeeApi(session.token, data, data.atividadeId ?? "");
+    else if (type === "usuarios" && initialUser) await updateUserApi(session.token, initialUser.id, { ...data, perfil: role, empreendedorId: data.empreendedorId || null });
+    else if (type === "usuarios") await createUserApi(session.token, data, role, data.empreendedorId);
+    else if (type === "modelos" && initialModel) await updateTemplateApi(session.token, initialModel, data);
+    else if (type === "modelos") await createTemplateApi(session.token, data, data.tipo as "Licença");
+    else if (type === "conteudos" && initialContent) await updateInstitutionalContentApi(session.token, initialContent, data);
+    else if (type === "conteudos") await createInstitutionalContentApi(session.token, data);
+    else if (type === "fiscalizacao") await createInspectionApi(session.token, data, data.processoId ?? "", session.perfil === "Fiscal" ? session.userId : data.fiscalId, inspectionFiles);
+    await refresh(); notify("Registro salvo com sucesso."); onClose();
+  } catch (cause) { setError(getUserErrorMessage(cause)); } finally { setSaving(false); } };
+  return <Modal title={`${initialUser || initialActivity || initialFee || initialContent || initialEntrepreneur || initialEnterprise || initialManager || initialModel ? "Editar" : "Adicionar"} ${registryConfig[type]?.title ?? "registro"}`} onClose={onClose}><form className="typed-form" onSubmit={submit}>
+    {type === "empreendedores" ? <><fieldset className="segmented"><legend>Tipo de pessoa</legend><button type="button" className={personType === "PF" ? "active" : ""} onClick={() => setPersonType("PF")}>Pessoa física</button><button type="button" className={personType === "PJ" ? "active" : ""} onClick={() => setPersonType("PJ")}>Pessoa jurídica</button></fieldset><Field name="nome" label={personType === "PF" ? "Nome completo" : "Razão social"} required defaultValue={initialEntrepreneur?.nome} /><Field name={personType === "PF" ? "cpf" : "cnpj"} label={personType} required inputMode="numeric" defaultValue={personType === "PF" ? initialEntrepreneur?.cpf ?? initialEntrepreneur?.documento : initialEntrepreneur?.cnpj ?? initialEntrepreneur?.documento} />{personType === "PF" ? <Field name="rg" label="RG" required defaultValue={initialEntrepreneur?.rg} /> : <><Field name="nomeFantasia" label="Nome fantasia" defaultValue={initialEntrepreneur?.nomeFantasia} /><Field name="inscricaoEstadual" label="Inscrição estadual" defaultValue={initialEntrepreneur?.inscricaoEstadual} /></>}<Field name="responsavelLegal" label="Representante legal" defaultValue={initialEntrepreneur?.responsavelLegal} /><Field name="telefone" label="Telefone" required inputMode="tel" defaultValue={initialEntrepreneur?.telefone} /><Field name="email" label="E-mail" required type="email" defaultValue={initialEntrepreneur?.email} /><Field name="endereco" label="Endereço" required wide defaultValue={initialEntrepreneur?.endereco} /></> : null}
+    {type === "responsaveis" ? <><Select name="empreendedorId" label="Empreendedor" defaultValue={initialManager?.empreendedorId} options={state.empreendedores.map((item) => [item.id, item.nome])} /><Select name="empreendimentoId" label="Empreendimento" required={false} defaultValue={initialManager?.empreendimentoId} options={state.empreendimentos.map((item) => [item.id, item.nome])} /><Field name="nome" label="Nome completo" required defaultValue={initialManager?.nome} /><Field name="cpf" label="CPF" required inputMode="numeric" defaultValue={initialManager?.cpf} /><Field name="conselho" label="Conselho profissional" required placeholder="CREA, CRBio, CRQ, CAU..." defaultValue={initialManager?.conselho} /><Field name="registroProfissional" label="Número do registro" required defaultValue={initialManager?.registroProfissional} /><Field name="telefone" label="Telefone" required inputMode="tel" defaultValue={initialManager?.telefone} /><Field name="email" label="E-mail" required type="email" defaultValue={initialManager?.email} /><label className="wide">ART ou documento equivalente<input name="art" type="file" accept="application/pdf,.pdf" /></label></> : null}
+    {type === "empreendimentos" ? <><Select name="empreendedorId" label="Proprietário" defaultValue={initialEnterprise?.empreendedorId} options={state.empreendedores.map((item) => [item.id, item.nome])} /><Select name="atividadeId" label="Atividade" defaultValue={initialEnterprise?.atividadeId} options={state.atividades.map((item) => [item.id, item.descricao])} /><Field name="nome" label="Nome" required defaultValue={initialEnterprise?.nome} /><Field name="endereco" label="Endereço" required defaultValue={initialEnterprise?.endereco} /><Field name="bairro" label="Bairro / localidade" defaultValue={initialEnterprise?.bairro} /><Field name="municipio" label="Município" defaultValue={initialEnterprise?.municipio ?? "Buriti - MA"} /><Select name="zona" label="Zona" defaultValue={initialEnterprise?.zona} options={[["URBANA", "Urbana"], ["RURAL", "Rural"]]} /><Field name="area" label="Área em hectares" type="number" step="0.01" defaultValue={initialEnterprise?.area} /><Field name="modulosFiscais" label="Módulos fiscais" type="number" step="0.01" defaultValue={initialEnterprise?.modulosFiscais} /><Field name="latitude" label="Latitude" type="number" step="any" defaultValue={initialEnterprise?.latitude} /><Field name="longitude" label="Longitude" type="number" step="any" defaultValue={initialEnterprise?.longitude} /><Field name="porte" label="Porte" defaultValue={initialEnterprise?.porte} /><Field name="potencial" label="Potencial poluidor" defaultValue={initialEnterprise?.potencial} /><Select name="classificacao" label="Classificação" defaultValue={initialEnterprise?.classificacao} options={[["Urbano", "Urbano"], ["Rural", "Rural"]]} /></> : null}
+    {type === "atividades" ? <><Field name="codigo" label="Código" required defaultValue={initialActivity?.codigo} /><Field name="descricao" label="Descrição" required wide defaultValue={initialActivity?.descricao} /><Field name="porte" label="Porte" required defaultValue={initialActivity?.porte} /><Field name="potencial" label="Potencial poluidor" required defaultValue={initialActivity?.potencial} /><Field name="licencas" label="Licenças, separadas por vírgula" required defaultValue={initialActivity?.licencas.join(", ")} /><Field name="documentos" label="Documentos, separados por vírgula ou linha" required wide defaultValue={initialActivity?.documentos.join(", ")} /><Field name="baseLegal" label="Base legal municipal" wide defaultValue={initialActivity?.baseLegal} /></> : null}
+    {type === "taxas" ? <><Select name="atividadeId" label="Atividade" defaultValue={initialFee?.atividadeId} options={state.atividades.map((item) => [item.id, item.descricao])} /><Field name="licenca" label="Licença" required defaultValue={initialFee?.licenca} /><Field name="porte" label="Porte" required defaultValue={initialFee?.porte} /><Field name="valor" label="Valor em reais" type="number" step="0.01" required defaultValue={initialFee?.valor} /></> : null}
+    {type === "usuarios" ? <><Field name="nome" label="Nome" required defaultValue={initialUser?.nome} /><Field name="email" label="E-mail" type="email" required defaultValue={initialUser?.email} /><Field name="telefone" label="Telefone" defaultValue={initialUser?.telefone} /><Field name="senha" label={initialUser ? "Nova senha (opcional)" : "Senha temporária"} type="password" required={!initialUser} /><label>Perfil<select value={role} onChange={(event) => setRole(event.target.value as Usuario["perfil"])}>{["Administrador", "Analista", "Fiscal", "Empreendedor"].map((item) => <option key={item}>{item}</option>)}</select></label>{role === "Empreendedor" ? <Select name="empreendedorId" label="Vínculo com empreendedor" defaultValue={initialUser?.empreendedorId} options={state.empreendedores.map((item) => [item.id, item.nome])} /> : null}</> : null}
+    {type === "modelos" ? <><Field name="nome" label="Nome" required defaultValue={initialModel?.nome} /><Select name="tipo" label="Tipo" defaultValue={initialModel?.tipo} options={["Licença", "Parecer", "Notificação", "Certidão", "Declaração", "Autorização", "Ofício"].map((item) => [item, item])} /><label className="wide">Conteúdo<textarea name="conteudo" required rows={10} placeholder="Use variáveis como {{processo}} e {{empreendimento}}" defaultValue={initialModel?.conteudo} /></label></> : null}
+    {type === "conteudos" ? <><Select name="tipo" label="Tipo" defaultValue={initialContent ? initialContent.tipo === "Manual" ? "MANUAL" : initialContent.tipo === "Legislação" ? "LEGISLACAO" : "NOTICIA" : undefined} options={initialContent ? [[initialContent.tipo === "Manual" ? "MANUAL" : initialContent.tipo === "Legislação" ? "LEGISLACAO" : "NOTICIA", initialContent.tipo]] : [["MANUAL", "Manual do usuário"], ["LEGISLACAO", "Legislação ambiental"], ["NOTICIA", "Notícia ou aviso"]]} /><Field name="titulo" label="Título" required wide defaultValue={initialContent?.titulo} /><Field name="resumo" label="Resumo" wide defaultValue={initialContent?.resumo} /><Field name="referencia" label="Referência / número da lei" wide defaultValue={initialContent?.referencia} /><label className="wide">Conteúdo<textarea name="conteudo" required rows={12} defaultValue={initialContent?.conteudo} /></label></> : null}
+    {type === "fiscalizacao" ? <><Select name="processoId" label="Processo" options={state.processos.map((item) => [item.id, item.numero])} />{session.perfil !== "Fiscal" ? <Select name="fiscalId" label="Fiscal" options={state.usuarios.filter((item) => item.perfil === "Fiscal").map((item) => [item.id, item.nome])} /> : null}<Select name="tipo" label="Tipo" options={["Vistoria", "Auto de infração", "Embargo", "Notificação"].map((item) => [item, item])} /><Field name="data" label="Data" type="datetime-local" required /><Field name="latitude" label="Latitude" type="number" step="any" /><Field name="longitude" label="Longitude" type="number" step="any" /><label className="wide">Relatório<textarea name="relatorio" rows={5} required /></label><label className="wide">Fotos e documentos<input name="anexos" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple /></label></> : null}
+    {error ? <div className="field-error wide" role="alert">{error}</div> : null}<footer className="form-footer"><Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button><Button loading={saving} type="submit"><Save />Salvar</Button></footer>
+  </form></Modal>;
+}
+
+function Field({ name, label, wide, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { name: string; label: string; wide?: boolean }) { return <label className={wide ? "wide" : ""}>{label}<input name={name} {...props} /></label>; }
+function Select({ name, label, options, required = true, defaultValue }: { name: string; label: string; options: string[][]; required?: boolean; defaultValue?: string }) { return <label>{label}<select name={name} required={required} defaultValue={defaultValue ?? ""}><option value="">{required ? "Selecione" : "Todos / não informado"}</option>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>; }
+const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+const maskDocument = (value: string) => value.length > 6 ? `${value.slice(0, 3)}••••${value.slice(-3)}` : "Documento protegido";
+
+export function ReportsPage() {
+  const { state, notify } = useApp();
+  const [filters, setFilters] = useState({ status: "Todos", year: "Todos", month: "Todos", license: "Todos", activity: "Todos", district: "", zone: "Todos", size: "Todos", analyst: "Todos" });
+  const years = [...new Set(state.processos.map((item) => item.abertura.split("/")[2]).filter(Boolean))].sort().reverse();
+  const rows = useMemo(() => state.processos.filter((item) => {
+    const enterprise = state.empreendimentos.find((entry) => entry.id === item.empreendimentoId);
+    const [, month, year] = item.abertura.split("/");
+    return (filters.status === "Todos" || item.status === filters.status)
+      && (filters.year === "Todos" || year === filters.year)
+      && (filters.month === "Todos" || month === filters.month)
+      && (filters.license === "Todos" || item.tipoLicenca === filters.license)
+      && (filters.activity === "Todos" || enterprise?.atividadeId === filters.activity)
+      && (!filters.district || enterprise?.bairro?.toLocaleLowerCase("pt-BR").includes(filters.district.toLocaleLowerCase("pt-BR")))
+      && (filters.zone === "Todos" || enterprise?.zona === filters.zone)
+      && (filters.size === "Todos" || enterprise?.porte === filters.size)
+      && (filters.analyst === "Todos" || item.analista === filters.analyst);
+  }), [filters, state.empreendimentos, state.processos]);
+  const csv = () => {
+    if (!rows.length) {
+      notify("Não há processos no filtro atual para exportar.", "warning");
+      return;
+    }
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const records = rows.map((item) => {
+      const enterprise = state.empreendimentos.find((entry) => entry.id === item.empreendimentoId);
+      const activity = state.atividades.find((entry) => entry.id === enterprise?.atividadeId);
+      const entrepreneur = state.empreendedores.find((entry) => entry.id === item.empreendedorId);
+      return [item.numero, item.protocolo, item.tipoLicenca, item.status, item.abertura, item.prazo, entrepreneur?.nome ?? "", enterprise?.nome ?? "", enterprise?.bairro ?? "", enterprise?.zona ?? "", enterprise?.porte ?? "", activity?.descricao ?? "", item.analista, item.licencaEmitida?.numero ?? ""];
+    });
+    const content = "\ufeff" + [["Processo", "Protocolo", "Tipo", "Situação", "Abertura", "Prazo", "Empreendedor", "Empreendimento", "Bairro/localidade", "Zona", "Porte", "Atividade", "Analista", "Documento emitido"], ...records].map((line) => line.map(escape).join(";")).join("\r\n");
+    saveBlob(new Blob([content], { type: "text/csv;charset=utf-8" }), `relatorio-licenciamento-${new Date().toISOString().slice(0, 10)}.csv`);
+    notify(`Relatório com ${rows.length} processo(s) preparado para download.`);
+  };
+  const setFilter = (key: keyof typeof filters, value: string) => setFilters((current) => ({ ...current, [key]: value }));
+  return <><PageHeader title="Relatórios gerenciais" description="Processos por período, licença, localidade, atividade, porte, analista e situação." actions={<><Button variant="secondary" onClick={() => window.print()}><Printer />Imprimir</Button><Button onClick={csv}><Download />Exportar CSV</Button></>} />
+    <div className="filter-bar report-filters">
+      <label>Ano<select value={filters.year} onChange={(event) => setFilter("year", event.target.value)}><option>Todos</option>{years.map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label>Mês<select value={filters.month} onChange={(event) => setFilter("month", event.target.value)}><option>Todos</option>{Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0")).map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label>Tipo de licença<select value={filters.license} onChange={(event) => setFilter("license", event.target.value)}><option>Todos</option>{[...new Set(state.processos.map((item) => item.tipoLicenca))].map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label>Situação<select value={filters.status} onChange={(event) => setFilter("status", event.target.value)}><option>Todos</option>{[...new Set(state.processos.map((item) => item.status))].map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label>Atividade<select value={filters.activity} onChange={(event) => setFilter("activity", event.target.value)}><option>Todos</option>{state.atividades.map((item) => <option value={item.id} key={item.id}>{item.descricao}</option>)}</select></label>
+      <label>Bairro / localidade<input value={filters.district} onChange={(event) => setFilter("district", event.target.value)} placeholder="Pesquisar localidade" /></label>
+      <label>Zona<select value={filters.zone} onChange={(event) => setFilter("zone", event.target.value)}><option>Todos</option><option value="URBANA">Urbana</option><option value="RURAL">Rural</option></select></label>
+      <label>Porte<select value={filters.size} onChange={(event) => setFilter("size", event.target.value)}><option>Todos</option>{[...new Set(state.empreendimentos.map((item) => item.porte))].map((item) => <option key={item}>{item}</option>)}</select></label>
+      <label>Analista<select value={filters.analyst} onChange={(event) => setFilter("analyst", event.target.value)}><option>Todos</option>{[...new Set(state.processos.map((item) => item.analista).filter(Boolean))].map((item) => <option key={item}>{item}</option>)}</select></label>
+    </div>
+    <section className="metrics-grid">
+      <article className="metric"><div><strong>{rows.length}</strong><span>Processos no filtro</span></div></article>
+      <article className="metric"><div><strong>{rows.filter((item) => item.licencaEmitida).length}</strong><span>Licenças e atos emitidos</span></div></article>
+      <article className="metric"><div><strong>{rows.filter((item) => item.status === "Em análise").length}</strong><span>Em análise</span></div></article>
+      <article className="metric"><div><strong>{rows.filter((item) => item.status === "Indeferido").length}</strong><span>Indeferidos</span></div></article>
+    </section>
+    <div className="data-table"><table><thead><tr><th>Processo</th><th>Tipo</th><th>Situação</th><th>Empreendimento</th><th>Atividade</th><th>Analista</th><th>Abertura</th><th>Prazo</th></tr></thead><tbody>{rows.map((item) => {
+      const enterprise = state.empreendimentos.find((entry) => entry.id === item.empreendimentoId);
+      return <tr key={item.id}><td>{item.numero}</td><td>{item.tipoLicenca}</td><td><StatusBadge>{item.status}</StatusBadge></td><td>{enterprise?.nome ?? "-"}</td><td>{state.atividades.find((entry) => entry.id === enterprise?.atividadeId)?.descricao ?? "-"}</td><td>{item.analista || "Não distribuído"}</td><td>{item.abertura}</td><td>{item.prazo}</td></tr>;
+    })}</tbody></table></div></>;
+}
+
+export function SettingsPage() {
+  const { state, session, refresh, notify } = useApp(); const [draft, setDraft] = useState(state.configuracao); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const dirty = JSON.stringify(draft) !== JSON.stringify(state.configuracao);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!session || !dirty || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await saveSettingsApi(session.token, draft);
+      await refresh();
+      notify("Configurações salvas com sucesso.");
+    } catch (cause) {
+      setError(getUserErrorMessage(cause, "Não foi possível salvar as configurações."));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <><PageHeader title="Configurações" description="Parâmetros institucionais, prazos, uploads e consulta pública." /><form className="settings-form" onSubmit={submit}><section><h2>Identidade institucional</h2><Field name="orgao" label="Órgão" value={draft.orgao} onChange={(event) => setDraft({ ...draft, orgao: event.target.value })} /><Field name="municipio" label="Município" value={draft.municipio} onChange={(event) => setDraft({ ...draft, municipio: event.target.value })} /></section><section><h2>Prazos</h2><Field name="prazo" label="Prazo de análise, em dias" type="number" min={1} max={365} value={draft.prazoAnaliseDias} onChange={(event) => setDraft({ ...draft, prazoAnaliseDias: Number(event.target.value) })} /><Field name="alerta" label="Alerta de vencimento, em dias" type="number" min={1} max={365} value={draft.alertaVencimentoDias} onChange={(event) => setDraft({ ...draft, alertaVencimentoDias: Number(event.target.value) })} /></section><section><h2>Uploads e consulta pública</h2><Field name="upload" label="Limite por arquivo, em MB" type="number" min={1} max={100} value={draft.tamanhoMaxUploadMb} onChange={(event) => setDraft({ ...draft, tamanhoMaxUploadMb: Number(event.target.value) })} /><label className="check"><input type="checkbox" checked={draft.consultaPublicaAtiva} onChange={(event) => setDraft({ ...draft, consultaPublicaAtiva: event.target.checked })} />Permitir consulta pública</label></section>{error ? <div className="field-error" role="alert">{error}</div> : null}<footer><span>{dirty ? "Alterações não salvas" : "Configurações atualizadas"}</span><Button loading={saving} disabled={!dirty}><Save />Salvar configurações</Button></footer></form></>;
+}

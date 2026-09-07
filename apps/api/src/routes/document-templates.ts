@@ -26,9 +26,32 @@ documentTemplatesRouter.post("/", requireAuth, allowRoles("ADMIN", "ANALISTA"), 
   return res.status(201).json(template);
 });
 
+documentTemplatesRouter.patch("/:id", requireAuth, allowRoles("ADMIN", "ANALISTA"), async (req, res) => {
+  const id = z.string().min(1).parse(req.params.id);
+  const parsed = z.object({
+    name: z.string().trim().min(3),
+    type: z.string().trim().min(3),
+    content: z.string().trim().min(10),
+    isActive: z.boolean()
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Modelo inválido" });
+  const template = await prisma.documentTemplate.update({ where: { id }, data: parsed.data });
+  await recordAudit(req.user, "TEMPLATE_UPDATE", "DocumentTemplate", id, { type: template.type, isActive: template.isActive });
+  return res.json(template);
+});
+
 documentTemplatesRouter.delete("/:id", requireAuth, allowRoles("ADMIN"), async (req, res) => {
   const id = z.string().min(1).parse(req.params.id);
   await prisma.documentTemplate.delete({ where: { id } });
   await recordAudit(req.user, "TEMPLATE_DELETE", "DocumentTemplate", id);
   return res.status(204).send();
+});
+
+documentTemplatesRouter.patch("/:id/status", requireAuth, allowRoles("ADMIN"), async (req, res) => {
+  const id = z.string().min(1).parse(req.params.id);
+  const parsed = z.object({ isActive: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Status invalido" });
+  const template = await prisma.documentTemplate.update({ where: { id }, data: { isActive: parsed.data.isActive } });
+  await recordAudit(req.user, "TEMPLATE_STATUS", "DocumentTemplate", id, { isActive: template.isActive });
+  return res.json(template);
 });

@@ -1,0 +1,73 @@
+import { CheckCircle2, Download, FileSearch, Leaf, Newspaper, Search, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { downloadPublicLicenseApi, getUserErrorMessage, publicInstitutionalContentApi, publicNewsApi, publicSearchApi, validatePublicLicenseApi, type PublicInstitutionalContent, type PublicLicense, type PublicNews } from "../../api";
+import { Button, EmptyState, Skeleton, StatusBadge } from "../../components/ui";
+import { saveBlob } from "../../utils/download";
+
+export function PublicHome() {
+  return <div className="public-home"><section className="public-intro"><div><h1>Licenciamento ambiental de Buriti</h1><p>Consulte processos e valide documentos emitidos pela Secretaria Municipal de Meio Ambiente e Turismo.</p><div><Link className="button button--primary" to="/consulta"><Search />Consultar processo</Link><Link className="button button--secondary" to="/validar-documento"><ShieldCheck />Validar documento</Link></div></div><Leaf className="public-intro__icon" aria-hidden="true" /></section><section className="public-services"><article><FileSearch /><h2>Consulta pública</h2><p>Acompanhe situação, empreendimento e tipo de licença usando número, protocolo, CPF ou CNPJ.</p></article><article><CheckCircle2 /><h2>Validação</h2><p>Confirme autenticidade somente pela resposta positiva do código de validação.</p></article><article><Newspaper /><h2>Transparência</h2><p>Acesse comunicados públicos sobre licenciamento ambiental municipal.</p></article></section><NewsSection /></div>;
+}
+
+function NewsSection() {
+  const [news, setNews] = useState<PublicNews[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  useEffect(() => { let active = true; publicNewsApi().then((items) => active && setNews(items)).catch((cause) => active && setError(getUserErrorMessage(cause))).finally(() => active && setLoading(false)); return () => { active = false; }; }, []);
+  return <section className="news-section"><h2>Notícias e comunicados</h2>{loading ? <Skeleton rows={3} /> : error ? <div className="field-error" role="alert">{error}</div> : news.length ? <div className="news-list">{news.map((item) => <article key={item.id}><time>{new Intl.DateTimeFormat("pt-BR").format(new Date(item.publishedAt))}</time><h3>{item.title}</h3><p>{item.body}</p></article>)}</div> : <EmptyState title="Nenhum comunicado publicado" description="Novos comunicados aparecerão aqui." />}</section>;
+}
+
+export function PublicSearchPage() {
+  const [query, setQuery] = useState(""); const [rows, setRows] = useState<Awaited<ReturnType<typeof publicSearchApi>>>([]); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const request = useRef(0);
+  useEffect(() => { const current = ++request.current; if (query.trim().length < 5) { setRows([]); setLoading(false); return; } setLoading(true); const timer = window.setTimeout(() => publicSearchApi(query).then((result) => { if (current === request.current) setRows(result); }).catch((cause) => { if (current === request.current) setError(getUserErrorMessage(cause)); }).finally(() => { if (current === request.current) setLoading(false); }), 500); return () => window.clearTimeout(timer); }, [query]);
+  const download = async (code: string, number?: string | null) => {
+    try {
+      saveBlob(await downloadPublicLicenseApi(code), `${number ?? "documento-ambiental"}.pdf`);
+    } catch (cause) {
+      setError(getUserErrorMessage(cause));
+    }
+  };
+  return <section className="public-tool"><h1>Consultar processo</h1><p>Informe número do processo, protocolo, CPF, CNPJ ou nome do empreendimento. Use ao menos cinco caracteres.</p><label className="public-query"><Search /><span className="sr-only">Termo de consulta</span><input value={query} onChange={(event) => { setError(""); setQuery(event.target.value); }} placeholder="Ex.: BURITI-2026-000123" /></label>{loading ? <Skeleton /> : error ? <div className="field-error" role="alert">{error}</div> : query.length >= 5 && !rows.length ? <EmptyState title="Nenhum processo encontrado" description="Confira o dado informado e tente novamente." /> : <div className="public-results">{rows.map((row) => <article key={row.number}><div><strong>{row.number}</strong><StatusBadge>{row.status}</StatusBadge></div><dl><dt>Empreendimento</dt><dd>{row.enterprise}</dd><dt>Tipo</dt><dd>{row.licenseType}</dd><dt>Validade</dt><dd>{row.validUntil ? new Intl.DateTimeFormat("pt-BR").format(new Date(row.validUntil)) : "Não informada"}</dd>{row.issuedNumber ? <><dt>Documento emitido</dt><dd>{row.issuedType} · {row.issuedNumber}</dd></> : null}</dl>{row.validationCode ? <div className="public-result-actions"><Link className="button button--secondary" to={`/validar-documento?codigo=${encodeURIComponent(row.validationCode)}`}><ShieldCheck />Validar</Link>{row.downloadAvailable ? <Button onClick={() => void download(row.validationCode!, row.issuedNumber)}><Download />Baixar PDF</Button> : null}</div> : null}</article>)}</div>}</section>;
+}
+
+export function LicenseValidationPage() {
+  const [searchParams] = useSearchParams();
+  const [code, setCode] = useState(() => searchParams.get("codigo") ?? "");
+  const [result, setResult] = useState<PublicLicense | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setResult(null);
+    setError("");
+    try {
+      setResult(await validatePublicLicenseApi(code));
+    } catch {
+      setError("Documento não encontrado ou código inválido.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  const download = async () => {
+    try {
+      saveBlob(await downloadPublicLicenseApi(code), `${result?.number ?? "documento-ambiental"}.pdf`);
+    } catch (cause) {
+      setError(getUserErrorMessage(cause));
+    }
+  };
+  return <section className="public-tool"><h1>Validar documento</h1><p>Informe o código presente no documento. A autenticidade é confirmada pela base municipal e pela assinatura criptográfica do arquivo.</p><form className="validation-form" onSubmit={submit}><label htmlFor="validation-code">Código de validação</label><input id="validation-code" value={code} onChange={(event) => setCode(event.target.value)} minLength={16} maxLength={80} required /><Button loading={loading}>Validar</Button></form>{error ? <div className="validation-invalid" role="alert"><ShieldCheck />{error}</div> : null}{result ? <article className="validation-result"><header><CheckCircle2 /><div><strong>Documento válido</strong><span>{result.signatureValid ? "Assinatura criptográfica verificada." : "Registro localizado na base municipal."}</span></div></header><dl>{Object.entries({ Número: result.number, Tipo: result.type, Emissão: new Intl.DateTimeFormat("pt-BR").format(new Date(result.issuedAt)), Validade: result.validUntil ? new Intl.DateTimeFormat("pt-BR").format(new Date(result.validUntil)) : "Não informada", "Responsável pela assinatura": result.signedBy ?? "Não informado", "Assinatura digital": result.signatureAlgorithm ?? "Não informada", Processo: result.process, Protocolo: result.protocol, Empreendimento: result.enterprise, Empreendedor: result.entrepreneur, Situação: result.status }).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{result.downloadAvailable ? <Button onClick={download}><Download />Baixar documento oficial</Button> : null}</article> : null}</section>;
+}
+
+export function InstitutionalContentPage({ type }: { type: "MANUAL" | "LEGISLACAO" }) {
+  const [items, setItems] = useState<PublicInstitutionalContent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setLoading(true);
+    publicInstitutionalContentApi(type)
+      .then(setItems)
+      .catch((cause) => setError(getUserErrorMessage(cause)))
+      .finally(() => setLoading(false));
+  }, [type]);
+  const title = type === "MANUAL" ? "Manual do usuário" : "Legislação ambiental municipal";
+  return <section className="public-tool institutional-content"><h1>{title}</h1><p>{type === "MANUAL" ? "Orientações para utilizar os serviços digitais de licenciamento ambiental." : "Normas e referências ambientais publicadas pelo Município de Buriti."}</p>{loading ? <Skeleton rows={4} /> : error ? <div className="field-error" role="alert">{error}</div> : items.length ? <div className="institutional-list">{items.map((item) => <article key={item.id}><header><div><h2>{item.title}</h2>{item.summary ? <p>{item.summary}</p> : null}</div><time>{new Intl.DateTimeFormat("pt-BR").format(new Date(item.publishedAt))}</time></header>{item.reference ? <strong>{item.reference}</strong> : null}<div className="institutional-body">{item.body.split(/\n{2,}/).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div></article>)}</div> : <EmptyState title="Conteúdo em preparação" description="A Secretaria publicará as informações nesta página." />}</section>;
+}
