@@ -5,7 +5,7 @@ import { getDashboardApi, getUserErrorMessage, type DashboardData } from "../../
 import { useApp } from "../../app/providers";
 import { Button, PageHeader, Skeleton, StatusBadge } from "../../components/ui";
 
-const colors = ["#0b6b45", "#d8aa32", "#087f8c", "#15803d", "#b42318", "#687970"];
+const colors = ["#0b6b45", "#d8aa32", "#087f8c", "#15803d", "#b42318", "#7a9084"];
 const statusNames: Record<string, string> = {
   RECEBIDO: "Recebido",
   DISTRIBUIDO: "Distribuído",
